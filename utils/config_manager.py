@@ -203,6 +203,58 @@ class ConfigManager:
         config = self.load_config()
         return config.get('schedule', {})
 
+    def is_schedule_enabled(self) -> bool:
+        """
+        Check if schedule restrictions are active.
+        Returns False if schedule allows all days/hours (no restrictions).
+        """
+        schedule = self.get_schedule()
+        allowed_days = schedule.get('allowed_days', [])
+        allowed_hours = schedule.get('allowed_hours', [])
+
+        # If no restrictions or empty lists, schedule is disabled (allows all)
+        return bool(allowed_days) and bool(allowed_hours)
+
+    def disable_schedule_restrictions(self) -> bool:
+        """
+        Disable schedule restrictions by clearing allowed_days and allowed_hours.
+        This allows execution at any time.
+
+        Returns:
+            True if successful
+        """
+        config = self.load_config()
+        if 'schedule' not in config:
+            config['schedule'] = {}
+
+        # Empty lists = no restrictions
+        config['schedule']['allowed_days'] = []
+        config['schedule']['allowed_hours'] = []
+
+        return self.save_config(config)
+
+    def enable_schedule_restrictions(self, days: list = None, hours: list = None) -> bool:
+        """
+        Enable schedule restrictions with specified days and hours.
+
+        Args:
+            days: List of allowed days (e.g., ["Saturday", "Sunday"])
+            hours: List of allowed hours (e.g., [2, 3, 4])
+
+        Returns:
+            True if successful
+        """
+        config = self.load_config()
+        if 'schedule' not in config:
+            config['schedule'] = {}
+
+        if days is not None:
+            config['schedule']['allowed_days'] = days
+        if hours is not None:
+            config['schedule']['allowed_hours'] = hours
+
+        return self.save_config(config)
+
     def is_config_file_accessible(self) -> bool:
         """Check if config file exists and is accessible"""
         return os.path.exists(self.config_path) and os.access(self.config_path, os.R_OK | os.W_OK)

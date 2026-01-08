@@ -73,6 +73,47 @@ try:
         if st.button("⚙️ All Settings", key="goto_settings_btn", use_container_width=True):
             st.switch_page("pages/4_⚙️_Settings.py")
 
+    # Schedule restrictions info and toggle
+    schedule = config.get('schedule', {})
+    allowed_days = schedule.get('allowed_days', [])
+    allowed_hours = schedule.get('allowed_hours', [])
+    schedule_enabled = bool(allowed_days) and bool(allowed_hours)
+
+    if schedule_enabled:
+        st.info(f"⏰ **Schedule Restrictions Active**: Only {', '.join(allowed_days)} at {', '.join([f'{h}:00' for h in allowed_hours])} ({schedule.get('timezone', 'UTC')})")
+
+        col_schedule_msg, col_schedule_toggle = st.columns([4, 1])
+
+        with col_schedule_msg:
+            st.caption("💡 Schedule safeguard prevents execution outside maintenance windows")
+
+        with col_schedule_toggle:
+            if st.button("🔓 Disable Schedule", key="disable_schedule_btn", use_container_width=True, type="secondary"):
+                if config_manager.disable_schedule_restrictions():
+                    st.success("✅ Schedule restrictions disabled - execution allowed anytime!")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to disable schedule")
+    else:
+        st.warning("⚠️ **Schedule Restrictions Disabled** - Execution allowed at any time")
+
+        col_schedule_msg, col_schedule_toggle = st.columns([4, 1])
+
+        with col_schedule_msg:
+            st.caption("ℹ️ For production, consider enabling schedule restrictions")
+
+        with col_schedule_toggle:
+            if st.button("🔒 Enable Schedule", key="enable_schedule_btn", use_container_width=True, type="secondary"):
+                # Restore default schedule (weekends, 2-5am)
+                if config_manager.enable_schedule_restrictions(
+                    days=["Saturday", "Sunday"],
+                    hours=[2, 3, 4]
+                ):
+                    st.success("✅ Schedule restored to safe defaults (weekends 2-5am)")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to enable schedule")
+
 except Exception as e:
     st.warning(f"⚠️ Could not load configuration status: {e}")
 
