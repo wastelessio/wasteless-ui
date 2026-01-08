@@ -1,4 +1,4 @@
-# 💰 Wasteless UI
+# 💰 Wasteless UI - Web Interface
 
 <div align="center">
 
@@ -10,6 +10,8 @@
 [![Status](https://img.shields.io/badge/Status-MVP-yellow.svg)]()
 
 *Stop monitoring waste. Start eliminating it.*
+
+**This is the web UI.** For the backend engine, see [wasteless](https://github.com/wastelessio/wasteless).
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Screenshots](#-screenshots) • [Documentation](#-documentation)
 
@@ -79,17 +81,35 @@ Multi-layer protection system:
 
 ## 🚀 Quick Start
 
+### ⚠️ Important: Backend Required
+
+**This UI requires the wasteless backend to be running first.**
+
+The UI connects to the PostgreSQL database managed by the backend engine.
+
 ### Prerequisites
 
 Before starting, ensure you have:
 - Python 3.11 or higher
-- [Wasteless main repo](https://github.com/wastelessio/wasteless) running (PostgreSQL must be up)
+- **[Wasteless backend](https://github.com/wastelessio/wasteless) installed and running** (PostgreSQL must be up)
 - 5 minutes
 
-### Installation
+### Step 1: Install Backend (if not done)
 
 ```bash
-# 1. Clone the repository
+# If you haven't installed the backend yet:
+git clone https://github.com/wastelessio/wasteless.git
+cd wasteless
+
+# Follow installation instructions in wasteless/README.md
+# Ensure PostgreSQL is running: docker-compose up -d
+```
+
+### Step 2: Install UI
+
+```bash
+# 1. Clone this repository (in a different directory)
+cd ..
 git clone https://github.com/wastelessio/wasteless-ui.git
 cd wasteless-ui
 
@@ -102,16 +122,39 @@ pip install -r requirements.txt
 
 # 4. Configure database connection
 cp .env.template .env
-# Edit .env with your PostgreSQL credentials
+# Edit .env - default values should work if backend is on localhost
 
-# 5. Launch the application
+# 5. Verify backend database is accessible
+# The backend should be running: docker ps | grep wasteless-postgres
+
+# 6. Launch the UI
 ./start.sh
 
-# 6. Open your browser
+# 7. Open your browser
 open http://localhost:8888
 ```
 
-**That's it!** You're now looking at your cloud costs in a whole new way.
+**That's it!** You now have a beautiful interface on your cloud cost data.
+
+### Typical Setup
+
+Most users will have this structure:
+
+```
+~/projects/
+├── wasteless/          # Backend engine (clone first)
+│   ├── docker-compose.yml   # PostgreSQL + Metabase
+│   ├── src/                 # Detection & execution code
+│   └── venv/
+└── wasteless-ui/       # Web UI (clone second)
+    ├── app.py               # Streamlit app
+    ├── pages/               # UI pages
+    └── venv/
+```
+
+Both run simultaneously:
+- Backend: PostgreSQL on port 5432, Metabase on port 3000
+- UI: Streamlit on port 8888
 
 ---
 
@@ -131,36 +174,59 @@ open http://localhost:8888
 
 ## 🏗️ Architecture
 
+### Complete System Architecture
+
 ```
-┌─────────────────────────────────────────────────┐
-│              Wasteless UI (Port 8888)           │
-│                                                 │
-│  ┌──────────────┐  ┌──────────────────────┐    │
-│  │  Streamlit   │  │   Interactive Pages  │    │
-│  │  Web Server  │  │  • Dashboard         │    │
-│  │              │  │  • Recommendations   │    │
-│  └──────┬───────┘  │  • History           │    │
-│         │          │  • Settings          │    │
-│         │          └──────────────────────┘    │
-│         ↓                                       │
-│  ┌──────────────────────────────────────┐      │
-│  │      PostgreSQL Database             │      │
-│  │   (from wasteless main repo)         │      │
-│  │  • ec2_metrics                       │      │
-│  │  • waste_detected                    │      │
-│  │  • recommendations                   │      │
-│  │  • actions_log                       │      │
-│  │  • savings_realized                  │      │
-│  └──────────────────────────────────────┘      │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     wasteless Backend                        │
+│  ┌────────────┐  ┌──────────┐  ┌──────────┐                 │
+│  │ Collectors │→ │ Detectors│→ │Remediators│                │
+│  └────────────┘  └──────────┘  └──────────┘                 │
+│         │              │              │                       │
+│         ↓              ↓              ↓                       │
+│  ┌───────────────────────────────────────────┐               │
+│  │      PostgreSQL Database                  │               │
+│  │  • ec2_metrics                            │               │
+│  │  • waste_detected                         │               │
+│  │  • recommendations                        │               │
+│  │  • actions_log                            │               │
+│  │  • savings_realized                       │               │
+│  └────────────┬──────────────────────────────┘               │
+└───────────────┼──────────────────────────────────────────────┘
+                │
+                │ SQL Queries (Read/Write)
+                │
+                ↓
+┌──────────────────────────────────────────────────────────────┐
+│                  wasteless-ui (This Repo)                    │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────────────┐                 │
+│  │  Streamlit   │  │   Interactive Pages  │                 │
+│  │  Web Server  │  │  • Dashboard         │                 │
+│  │ (Port 8888)  │  │  • Recommendations   │                 │
+│  │              │  │  • History           │                 │
+│  │              │  │  • Settings          │                 │
+│  └──────────────┘  └──────────────────────┘                 │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Data Flow
-1. UI queries PostgreSQL for real-time data
-2. User reviews recommendations and approves/rejects
-3. Actions are logged and executed (via main repo)
-4. Savings are tracked and verified
-5. Dashboards update automatically
+1. **Backend** collects metrics from AWS → stores in PostgreSQL
+2. **Backend** detects waste → creates recommendations in DB
+3. **UI** queries PostgreSQL → displays data in web interface
+4. **User** reviews and approves recommendations via UI
+5. **Backend** executes actions → updates status in DB
+6. **UI** shows updated results → complete audit trail
+
+### Why Two Repositories?
+
+| Aspect | Reasoning |
+|--------|-----------|
+| **Separation of Concerns** | Backend = data processing, UI = presentation |
+| **Independent Deployment** | Can run backend without UI (CLI-only) |
+| **Technology Stack** | Backend uses boto3/pandas, UI uses Streamlit |
+| **Development** | Different teams can work independently |
+| **Scalability** | Can add multiple UIs (web, mobile, CLI) |
 
 ---
 
