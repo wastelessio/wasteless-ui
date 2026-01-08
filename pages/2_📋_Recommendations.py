@@ -24,6 +24,9 @@ st.set_page_config(
 # Import database connection from main app
 from app import get_db_connection
 
+# Import remediator integration
+from utils.remediator import RemediatorProxy, check_backend_available, get_backend_path
+
 st.title("📋 Cost Optimization Recommendations")
 st.markdown("Review and manage idle resource recommendations")
 st.markdown("---")
@@ -204,41 +207,122 @@ else:
     if selected_ids:
         st.info(f"📌 {len(selected_ids)} recommendation(s) selected: {selected_ids}")
 
+        # Check if backend is available
+        backend_available = check_backend_available()
+        if not backend_available:
+            st.warning(f"""
+            ⚠️ **Backend not found at:** `{get_backend_path()}`
+
+            To execute actions, make sure the wasteless backend is cloned:
+            ```bash
+            cd {os.path.dirname(get_backend_path())}
+            git clone https://github.com/wastelessio/wasteless.git
+            ```
+            """)
+
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            if st.button("✅ Execute Selected", type="primary", use_container_width=True):
+            if st.button("✅ Execute Selected", type="primary", use_container_width=True, disabled=not backend_available):
                 if action_type == "Reject":
                     # Reject recommendations
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                        UPDATE recommendations
-                        SET status = 'rejected',
-                            updated_at = NOW()
-                        WHERE id = ANY(%s)
-                        """,
-                        (selected_ids,)
-                    )
-                    conn.commit()
-                    cursor.close()
+                    try:
+                        remediator = RemediatorProxy()
+                        result = remediator.reject_recommendations(conn, selected_ids)
 
-                    st.success(f"✅ {len(selected_ids)} recommendation(s) rejected!")
-                    st.rerun()
+                        if result['success']:
+                            st.success(f"✅ {result['rejected_count']} recommendation(s) rejected!")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Failed to reject: {result.get('error', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
 
                 elif action_type == "Approve (Dry-Run)":
+                    # Execute in dry-run mode
                     st.info("🧪 **DRY-RUN MODE** - No actual AWS actions will be executed")
-                    st.warning("⚠️ This would normally call EC2Remediator in dry-run mode")
-                    st.code(f"remediator.process_recommendations(ids={selected_ids}, dry_run=True)")
+
+                    try:
+                        with st.spinner("🔄 Executing actions in dry-run mode..."):
+                            remediator = RemediatorProxy(dry_run=True)
+                            results = remediator.execute_recommendations(conn, selected_ids)
+
+                        # Display results
+                        success_count = len([r for r in results if r.get('success', False)])
+                        failed_count = len(results) - success_count
+
+                        if success_count > 0:
+                            st.success(f"✅ {success_count}/{len(results)} actions completed successfully!")
+
+                        if failed_count > 0:
+                            st.warning(f"⚠️ {failed_count}/{len(results)} actions failed")
+
+                        # Detailed results
+                        st.markdown("### 📋 Execution Details")
+                        for r in results:
+                            with st.expander(f"{'✅' if r.get('success') else '❌'} Recommendation #{r['recommendation_id']} - {r.get('instance_id', 'unknown')}"):
+                                st.json(r)
+
+                        if success_count > 0:
+                            st.balloons()
+                            if st.button("🔄 Refresh Page"):
+                                st.rerun()
+
+                    except Exception as e:
+                        st.error(f"❌ Execution failed: {e}")
+                        import traceback
+                        with st.expander("🔍 Error Details"):
+                            st.code(traceback.format_exc())
 
                 else:  # Approve (Execute)
-                    st.warning("⚠️ **PRODUCTION MODE** - This will execute real AWS actions!")
-                    st.error("🔒 Auto-remediation must be enabled in config/remediation.yaml")
-                    st.code(f"remediator.process_recommendations(ids={selected_ids}, dry_run=False)")
+                    # Production mode - show confirmation
+                    st.warning("⚠️ **PRODUCTION MODE** - This will execute REAL AWS actions!")
+                    st.error("🔒 This will STOP or TERMINATE instances on your AWS account!")
+
+                    if st.checkbox("I understand this will modify my AWS infrastructure"):
+                        if st.button("⚡ CONFIRM EXECUTION", type="secondary"):
+                            try:
+                                with st.spinner("⚡ Executing REAL AWS actions..."):
+                                    remediator = RemediatorProxy(dry_run=False)
+                                    results = remediator.execute_recommendations(conn, selected_ids)
+
+                                # Display results
+                                success_count = len([r for r in results if r.get('success', False)])
+                                failed_count = len(results) - success_count
+
+                                if success_count > 0:
+                                    st.success(f"✅ {success_count}/{len(results)} REAL actions executed!")
+
+                                if failed_count > 0:
+                                    st.error(f"❌ {failed_count}/{len(results)} actions failed")
+
+                                # Detailed results
+                                st.markdown("### 📋 Execution Results")
+                                for r in results:
+                                    with st.expander(f"{'✅' if r.get('success') else '❌'} {r.get('instance_id', 'unknown')}"):
+                                        st.json(r)
+
+                                if success_count > 0:
+                                    st.balloons()
+                                    st.info("💡 Check the History page for complete audit trail")
+
+                            except Exception as e:
+                                st.error(f"❌ Execution failed: {e}")
 
         with col2:
             if st.button("📊 View Details", use_container_width=True):
-                st.info("Detail view coming soon...")
+                if selected_ids:
+                    st.markdown("### 📋 Selected Recommendations Details")
+                    for rec_id in selected_ids:
+                        rec_data = df[df['id'] == rec_id].iloc[0]
+                        with st.expander(f"Recommendation #{rec_id}"):
+                            st.write(f"**Instance:** {rec_data['resource_id']}")
+                            st.write(f"**Type:** {rec_data['recommendation_type']}")
+                            st.write(f"**Instance Type:** {rec_data.get('instance_type', 'N/A')}")
+                            st.write(f"**CPU Avg:** {rec_data.get('cpu_avg', 0):.2f}%")
+                            st.write(f"**Savings:** €{rec_data['estimated_monthly_savings_eur']:.2f}/month")
+                            st.write(f"**Confidence:** {rec_data['confidence_score']:.0%}")
 
         with col3:
             if st.button("🔄 Refresh Data", use_container_width=True):
