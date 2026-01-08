@@ -32,7 +32,7 @@ st.title("📋 Cost Optimization Recommendations")
 st.markdown("Review and manage idle resource recommendations")
 
 # =============================================================================
-# ACTIONABLE ALERTS - Configuration Status
+# ACTIONABLE ALERTS - Configuration Status with Interactive Toggle
 # =============================================================================
 
 # Check current configuration
@@ -41,21 +41,37 @@ try:
     config = config_manager.load_config()
     auto_enabled = config.get('auto_remediation', {}).get('enabled', False)
 
-    # Show actionable alerts based on configuration
-    if not auto_enabled:
-        col_alert, col_button = st.columns([4, 1])
-        with col_alert:
+    # Show status alert with interactive toggle
+    col_status, col_toggle, col_settings = st.columns([3, 1, 1])
+
+    with col_status:
+        if not auto_enabled:
             st.success("✅ **AUTO-REMEDIATION IS DISABLED** - Only dry-run mode is active (safe)")
-        with col_button:
-            if st.button("⚙️ Enable in Settings", key="enable_alert_btn", use_container_width=True):
-                st.switch_page("pages/4_⚙️_Settings.py")
-    else:
-        col_alert, col_button = st.columns([4, 1])
-        with col_alert:
+        else:
             st.error("⚠️ **AUTO-REMEDIATION IS ENABLED** - Real AWS actions will be executed!")
-        with col_button:
-            if st.button("⚙️ Disable in Settings", key="disable_alert_btn", use_container_width=True):
-                st.switch_page("pages/4_⚙️_Settings.py")
+
+    with col_toggle:
+        st.markdown("###")  # Spacing
+        new_enabled = st.toggle(
+            "Enable Auto-Remediation",
+            value=auto_enabled,
+            key="auto_remediation_toggle_recommendations",
+            help="⚠️ When enabled, 'Approve (Execute)' will perform REAL AWS actions"
+        )
+
+        # Save if changed
+        if new_enabled != auto_enabled:
+            with st.spinner("Saving configuration..."):
+                if config_manager.set_auto_remediation_enabled(new_enabled):
+                    st.success("✅ Saved!")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to save")
+
+    with col_settings:
+        st.markdown("###")  # Spacing
+        if st.button("⚙️ All Settings", key="goto_settings_btn", use_container_width=True):
+            st.switch_page("pages/4_⚙️_Settings.py")
 
 except Exception as e:
     st.warning(f"⚠️ Could not load configuration status: {e}")
