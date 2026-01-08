@@ -79,7 +79,7 @@ query = """
         r.status,
         r.created_at,
         w.metadata->>'instance_type' as instance_type,
-        w.metadata->>'cpu_avg_7d' as cpu_avg
+        (w.metadata->>'cpu_avg_7d')::numeric as cpu_avg
     FROM recommendations r
     JOIN waste_detected w ON r.waste_id = w.id
     WHERE r.status = 'pending'
@@ -320,9 +320,17 @@ else:
                             st.write(f"**Instance:** {rec_data['resource_id']}")
                             st.write(f"**Type:** {rec_data['recommendation_type']}")
                             st.write(f"**Instance Type:** {rec_data.get('instance_type', 'N/A')}")
-                            st.write(f"**CPU Avg:** {rec_data.get('cpu_avg', 0):.2f}%")
-                            st.write(f"**Savings:** €{rec_data['estimated_monthly_savings_eur']:.2f}/month")
-                            st.write(f"**Confidence:** {rec_data['confidence_score']:.0%}")
+
+                            # Safely convert to float for formatting
+                            cpu_avg = rec_data.get('cpu_avg', 0)
+                            cpu_avg = float(cpu_avg) if cpu_avg is not None else 0.0
+                            st.write(f"**CPU Avg:** {cpu_avg:.2f}%")
+
+                            savings = float(rec_data['estimated_monthly_savings_eur'])
+                            st.write(f"**Savings:** €{savings:.2f}/month")
+
+                            confidence = float(rec_data['confidence_score'])
+                            st.write(f"**Confidence:** {confidence:.0%}")
 
         with col3:
             if st.button("🔄 Refresh Data", use_container_width=True):
