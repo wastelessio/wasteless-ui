@@ -26,9 +26,40 @@ from app import get_db_connection
 
 # Import remediator integration
 from utils.remediator import RemediatorProxy, check_backend_available, get_backend_path
+from utils.config_manager import ConfigManager
 
 st.title("📋 Cost Optimization Recommendations")
 st.markdown("Review and manage idle resource recommendations")
+
+# =============================================================================
+# ACTIONABLE ALERTS - Configuration Status
+# =============================================================================
+
+# Check current configuration
+try:
+    config_manager = ConfigManager()
+    config = config_manager.load_config()
+    auto_enabled = config.get('auto_remediation', {}).get('enabled', False)
+
+    # Show actionable alerts based on configuration
+    if not auto_enabled:
+        col_alert, col_button = st.columns([4, 1])
+        with col_alert:
+            st.success("✅ **AUTO-REMEDIATION IS DISABLED** - Only dry-run mode is active (safe)")
+        with col_button:
+            if st.button("⚙️ Enable in Settings", key="enable_alert_btn", use_container_width=True):
+                st.switch_page("pages/4_⚙️_Settings.py")
+    else:
+        col_alert, col_button = st.columns([4, 1])
+        with col_alert:
+            st.error("⚠️ **AUTO-REMEDIATION IS ENABLED** - Real AWS actions will be executed!")
+        with col_button:
+            if st.button("⚙️ Disable in Settings", key="disable_alert_btn", use_container_width=True):
+                st.switch_page("pages/4_⚙️_Settings.py")
+
+except Exception as e:
+    st.warning(f"⚠️ Could not load configuration status: {e}")
+
 st.markdown("---")
 
 # Get database connection
