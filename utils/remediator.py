@@ -11,8 +11,9 @@ Author: Wasteless Team
 
 import os
 import sys
-from typing import List, Dict
+from typing import List, Dict, Any
 import logging
+from datetime import datetime, date
 
 # Add backend path to sys.path to import backend modules
 # Path structure: wasteless-ui/utils/ -> go up 2 levels -> wasteless/
@@ -28,6 +29,28 @@ else:
     logging.warning(f"Backend path not found: {BACKEND_PATH}")
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_for_json(obj: Any) -> Any:
+    """
+    Convert datetime objects to ISO format strings for JSON serialization.
+
+    Args:
+        obj: Object that may contain datetime objects
+
+    Returns:
+        Sanitized object with datetimes converted to strings
+    """
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    elif isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(sanitize_for_json(item) for item in obj)
+    else:
+        return obj
 
 
 class RemediatorProxy:
@@ -148,6 +171,9 @@ class RemediatorProxy:
                 result['recommendation_id'] = rec_id
                 result['recommendation_type'] = rec_type
                 result['confidence'] = float(confidence)
+
+                # Sanitize datetime objects for JSON serialization
+                result = sanitize_for_json(result)
 
                 results.append(result)
 
