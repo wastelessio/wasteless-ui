@@ -251,10 +251,28 @@ else:
             ```
             """)
 
+        # Special handling for Production mode - show confirmation BEFORE button
+        if action_type == "Approve (Execute)":
+            st.warning("⚠️ **PRODUCTION MODE** - This will execute REAL AWS actions!")
+            st.error("🔒 This will STOP or TERMINATE instances on your AWS account!")
+
+            confirm_production = st.checkbox(
+                "✅ I understand this will modify my AWS infrastructure",
+                key="confirm_prod_checkbox"
+            )
+        else:
+            confirm_production = True  # Not needed for other actions
+
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            if st.button("✅ Execute Selected", type="primary", use_container_width=True, disabled=not backend_available):
+            # Disable button if production mode and not confirmed
+            button_disabled = not backend_available or (action_type == "Approve (Execute)" and not confirm_production)
+
+            button_label = "✅ Execute Selected" if action_type != "Approve (Execute)" else "⚡ EXECUTE ON AWS"
+            button_type = "primary" if action_type != "Approve (Execute)" else "secondary"
+
+            if st.button(button_label, type=button_type, use_container_width=True, disabled=button_disabled, key="execute_btn"):
                 if action_type == "Reject":
                     # Reject recommendations
                     try:
@@ -307,39 +325,39 @@ else:
                             st.code(traceback.format_exc())
 
                 else:  # Approve (Execute)
-                    # Production mode - show confirmation
-                    st.warning("⚠️ **PRODUCTION MODE** - This will execute REAL AWS actions!")
-                    st.error("🔒 This will STOP or TERMINATE instances on your AWS account!")
+                    # Production mode - execute real actions
+                    st.info("⚡ **EXECUTING REAL AWS ACTIONS...**")
 
-                    if st.checkbox("I understand this will modify my AWS infrastructure"):
-                        if st.button("⚡ CONFIRM EXECUTION", type="secondary"):
-                            try:
-                                with st.spinner("⚡ Executing REAL AWS actions..."):
-                                    remediator = RemediatorProxy(dry_run=False)
-                                    results = remediator.execute_recommendations(conn, selected_ids)
+                    try:
+                        with st.spinner("⚡ Executing REAL AWS actions..."):
+                            remediator = RemediatorProxy(dry_run=False)
+                            results = remediator.execute_recommendations(conn, selected_ids)
 
-                                # Display results
-                                success_count = len([r for r in results if r.get('success', False)])
-                                failed_count = len(results) - success_count
+                        # Display results
+                        success_count = len([r for r in results if r.get('success', False)])
+                        failed_count = len(results) - success_count
 
-                                if success_count > 0:
-                                    st.success(f"✅ {success_count}/{len(results)} REAL actions executed!")
+                        if success_count > 0:
+                            st.success(f"✅ {success_count}/{len(results)} REAL actions executed!")
 
-                                if failed_count > 0:
-                                    st.error(f"❌ {failed_count}/{len(results)} actions failed")
+                        if failed_count > 0:
+                            st.error(f"❌ {failed_count}/{len(results)} actions failed")
 
-                                # Detailed results
-                                st.markdown("### 📋 Execution Results")
-                                for r in results:
-                                    with st.expander(f"{'✅' if r.get('success') else '❌'} {r.get('instance_id', 'unknown')}"):
-                                        st.json(r)
+                        # Detailed results
+                        st.markdown("### 📋 Execution Results")
+                        for r in results:
+                            with st.expander(f"{'✅' if r.get('success') else '❌'} {r.get('instance_id', 'unknown')}"):
+                                st.json(r)
 
-                                if success_count > 0:
-                                    st.balloons()
-                                    st.info("💡 Check the History page for complete audit trail")
+                        if success_count > 0:
+                            st.balloons()
+                            st.info("💡 Check the History page for complete audit trail")
 
-                            except Exception as e:
-                                st.error(f"❌ Execution failed: {e}")
+                    except Exception as e:
+                        st.error(f"❌ Execution failed: {e}")
+                        import traceback
+                        with st.expander("🔍 Error Details"):
+                            st.code(traceback.format_exc())
 
         with col2:
             if st.button("📊 View Details", use_container_width=True):
