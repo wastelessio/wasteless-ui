@@ -1,0 +1,24 @@
+[theme]
+primaryColor = "#667eea"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f3f4f6"
+textColor = "#111827"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+
+[server]
+maxUploadSize = 50
+# Performance optimizations
+enableCORS = false
+enableXsrfProtection = false
+fileWatcherType = "auto"
+
+[runner]
+# Faster hot-reloading
+fastReruns = true
+
+[browser]
+# Skip browser auto-open for faster startup
+gatherUsageStats = false
