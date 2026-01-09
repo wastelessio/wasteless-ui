@@ -1,28 +1,10 @@
-# Wasteless UI - Python Dependencies
-# ===================================
-
-# Web Framework
-streamlit>=1.30.0
-
-# Data manipulation (compatible with Python 3.13)
-pandas>=2.2.0
-numpy>=1.26.0
-
-# Database
+streamlit>=1.52.0
+pandas>=2.3.0
+plotly>=6.5.0
 psycopg2-binary>=2.9.0
-
-# Visualization
-plotly>=5.18.0
-
-# Configuration
-python-dotenv>=1.0.0
-pyyaml>=6.0
-
-# HTTP requests (for API calls to backend)
-requests>=2.31.0
-
-# Date/Time utilities
-python-dateutil>=2.8.0
-
-# AWS SDK (required for EC2Remediator integration)
+python-dotenv>=1.2.0
+pyyaml>=6.0.0
+# Backend integration dependencies
 boto3>=1.34.0
+numpy>=1.26.0
+click>=8.1.0
