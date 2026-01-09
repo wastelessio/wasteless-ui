@@ -30,10 +30,15 @@ load_dotenv()
 
 # Page configuration
 st.set_page_config(
-    page_title="Wasteless.io - Cloud Cost Optimizer",
-    page_icon="💰",
+    page_title="Wasteless - Cloud Cost Optimizer",
+    page_icon="🌱",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/wastelessio/wasteless',
+        'Report a bug': 'https://github.com/wastelessio/wasteless/issues',
+        'About': '# Wasteless\nAutonomous cloud cost optimization platform'
+    }
 )
 
 # Apply design system styles
@@ -183,10 +188,15 @@ def fetch_recent_actions(_conn, limit=5):
         st.error(f"❌ Failed to fetch actions data: {e}")
         return pd.DataFrame()
 
-# Sidebar navigation
-st.sidebar.image("https://via.placeholder.com/150x50/667eea/ffffff?text=Wasteless.io", width="stretch")
-st.sidebar.title("🧭 Navigation")
+# Sidebar navigation with logo
+import os
+logo_path = "static/images/logo.png"
+if os.path.exists(logo_path):
+    st.sidebar.image(logo_path, use_container_width=True)
+else:
+    st.sidebar.title("Wasteless")
 st.sidebar.markdown("---")
+st.sidebar.title("🧭 Navigation")
 
 # Connection status
 conn = get_db_connection()
@@ -196,9 +206,16 @@ else:
     st.sidebar.error("❌ Database Disconnected")
     st.stop()
 
-# Main page content
-st.markdown('<h1 class="main-header">💰 Wasteless.io</h1>', unsafe_allow_html=True)
-st.markdown("**Autonomous cloud cost optimization. From detection to execution.**")
+# Main page content - Logo and title
+col_logo, col_title = st.columns([1, 4])
+with col_logo:
+    if os.path.exists(logo_path):
+        st.image(logo_path, width=120)
+    else:
+        st.markdown("# 🌱")
+with col_title:
+    st.markdown('<h1 class="main-header" style="margin-top: 20px;">Cloud Cost Optimization</h1>', unsafe_allow_html=True)
+    st.markdown("**Autonomous detection and execution. Stop waste, save money.**")
 st.markdown("---")
 
 # Welcome section - Display metrics
