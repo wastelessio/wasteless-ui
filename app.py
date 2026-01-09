@@ -21,6 +21,9 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+from utils.logger import get_logger, log_user_action, log_db_query, log_error
+from utils.design_system import apply_global_styles, Colors
+import time
 
 # Load environment variables
 load_dotenv()
@@ -33,7 +36,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Apply design system styles
+apply_global_styles()
+
+# Custom CSS for better styling (deprecated - kept for compatibility)
 st.markdown("""
 <style>
     .main-header {
@@ -86,8 +92,99 @@ def get_db_connection():
         st.info("💡 Make sure PostgreSQL is running and credentials are correct in .env")
         return None
 
+@st.cache_data(ttl=30)
+def fetch_home_metrics(_conn):
+    """
+    Fetch all home page metrics in a single optimized query.
+    Uses CTE and single query to minimize database round-trips.
+    Returns dict with all metrics or None on error.
+    """
+    logger = get_logger('data')
+    start_time = time.time()
+    try:
+        query = """
+            WITH metrics AS (
+                SELECT
+                    COALESCE(SUM(estimated_monthly_savings_eur), 0) as potential_savings,
+                    COUNT(*) FILTER (WHERE status = 'pending') as pending_count
+                FROM recommendations
+            ),
+            actions AS (
+                SELECT COUNT(*) as success_count
+                FROM actions_log
+                WHERE action_status = 'success'
+            )
+            SELECT
+                m.potential_savings,
+                m.pending_count,
+                a.success_count
+            FROM metrics m
+            CROSS JOIN actions a;
+        """
+
+        cursor = _conn.cursor()
+        cursor.execute(query)
+        result = cursor.fetchone()
+        cursor.close()
+
+        if result:
+            duration_ms = (time.time() - start_time) * 1000
+            log_db_query('fetch_home_metrics', duration_ms, success=True)
+            return {
+                'potential_savings': float(result[0]),
+                'pending_count': int(result[1]),
+                'actions_count': int(result[2])
+            }
+        return None
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_home_metrics', duration_ms, success=False)
+        log_error(e, context='fetch_home_metrics')
+        st.error(f"❌ Failed to fetch metrics: {e}")
+        return None
+
+@st.cache_data(ttl=30)
+def fetch_recent_waste(_conn, limit=5):
+    """Fetch recent waste detected with error handling."""
+    try:
+        query = """
+            SELECT
+                resource_id,
+                waste_type,
+                monthly_waste_eur,
+                confidence_score,
+                created_at
+            FROM waste_detected
+            ORDER BY created_at DESC
+            LIMIT %s
+        """
+        return pd.read_sql(query, _conn, params=(limit,))
+    except Exception as e:
+        st.error(f"❌ Failed to fetch waste data: {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=30)
+def fetch_recent_actions(_conn, limit=5):
+    """Fetch recent actions with error handling."""
+    try:
+        query = """
+            SELECT
+                resource_id,
+                action_type,
+                action_status,
+                action_date
+            FROM actions_log
+            ORDER BY action_date DESC
+            LIMIT %s
+        """
+        return pd.read_sql(query, _conn, params=(limit,))
+    except Exception as e:
+        st.error(f"❌ Failed to fetch actions data: {e}")
+        return pd.DataFrame()
+
 # Sidebar navigation
-st.sidebar.image("https://via.placeholder.com/150x50/667eea/ffffff?text=Wasteless.io", use_container_width=True)
+st.sidebar.image("https://via.placeholder.com/150x50/667eea/ffffff?text=Wasteless.io", width="stretch")
 st.sidebar.title("🧭 Navigation")
 st.sidebar.markdown("---")
 
@@ -104,59 +201,41 @@ st.markdown('<h1 class="main-header">💰 Wasteless.io</h1>', unsafe_allow_html=
 st.markdown("**Autonomous cloud cost optimization. From detection to execution.**")
 st.markdown("---")
 
-# Welcome section
+# Welcome section - Display metrics
 col1, col2, col3 = st.columns(3)
 
-# Fetch key metrics
-cursor = conn.cursor()
+# Fetch all metrics with a single optimized query and spinner
+with st.spinner("Loading metrics..."):
+    metrics = fetch_home_metrics(conn)
 
-# Potential savings
-cursor.execute("""
-    SELECT COALESCE(SUM(estimated_monthly_savings_eur), 0) as total
-    FROM recommendations
-    WHERE status = 'pending'
-""")
-potential_savings = cursor.fetchone()[0]
+if metrics:
+    potential_savings = metrics['potential_savings']
+    pending_count = metrics['pending_count']
+    actions_count = metrics['actions_count']
 
-# Pending recommendations count
-cursor.execute("""
-    SELECT COUNT(*)
-    FROM recommendations
-    WHERE status = 'pending'
-""")
-pending_count = cursor.fetchone()[0]
+    # Display metrics
+    with col1:
+        st.metric(
+            label="💵 Potential Monthly Savings",
+            value=f"€{potential_savings:,.2f}",
+            delta=f"€{potential_savings * 12:,.0f}/year"
+        )
 
-# Actions executed
-cursor.execute("""
-    SELECT COUNT(*)
-    FROM actions_log
-    WHERE action_status = 'success'
-""")
-actions_count = cursor.fetchone()[0]
+    with col2:
+        st.metric(
+            label="📋 Pending Recommendations",
+            value=f"{pending_count}",
+            delta="Ready to review"
+        )
 
-cursor.close()
-
-# Display metrics
-with col1:
-    st.metric(
-        label="💵 Potential Monthly Savings",
-        value=f"€{potential_savings:,.2f}",
-        delta=f"€{potential_savings * 12:,.0f}/year"
-    )
-
-with col2:
-    st.metric(
-        label="📋 Pending Recommendations",
-        value=f"{pending_count}",
-        delta="Ready to review"
-    )
-
-with col3:
-    st.metric(
-        label="✅ Actions Executed",
-        value=f"{actions_count}",
-        delta="Successfully applied"
-    )
+    with col3:
+        st.metric(
+            label="✅ Actions Executed",
+            value=f"{actions_count}",
+            delta="Successfully applied"
+        )
+else:
+    st.error("❌ Failed to load metrics. Please refresh the page.")
 
 st.markdown("---")
 
@@ -168,18 +247,8 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("### 🔍 Latest Waste Detected")
 
-    query = """
-        SELECT
-            resource_id,
-            waste_type,
-            monthly_waste_eur,
-            confidence_score,
-            created_at
-        FROM waste_detected
-        ORDER BY created_at DESC
-        LIMIT 5
-    """
-    df_waste = pd.read_sql(query, conn)
+    with st.spinner("Loading waste data..."):
+        df_waste = fetch_recent_waste(conn, limit=5)
 
     if not df_waste.empty:
         st.dataframe(
@@ -202,7 +271,7 @@ with col1:
                 )
             },
             hide_index=True,
-            use_container_width=True
+            width="stretch"
         )
     else:
         st.info("No waste detected yet. Run the detection pipeline first.")
@@ -210,17 +279,8 @@ with col1:
 with col2:
     st.markdown("### 🚀 Latest Actions")
 
-    query = """
-        SELECT
-            resource_id,
-            action_type,
-            action_status,
-            action_date
-        FROM actions_log
-        ORDER BY action_date DESC
-        LIMIT 5
-    """
-    df_actions = pd.read_sql(query, conn)
+    with st.spinner("Loading actions..."):
+        df_actions = fetch_recent_actions(conn, limit=5)
 
     if not df_actions.empty:
         # Add emoji based on status
@@ -241,7 +301,7 @@ with col2:
                 )
             },
             hide_index=True,
-            use_container_width=True
+            width="stretch"
         )
     else:
         st.info("No actions executed yet.")
@@ -254,19 +314,19 @@ st.subheader("⚡ Quick Actions")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    if st.button("📋 View Recommendations", use_container_width=True):
+    if st.button("📋 View Recommendations", width="stretch"):
         st.switch_page("pages/2_📋_Recommendations.py")
 
 with col2:
-    if st.button("📊 Open Dashboard", use_container_width=True):
+    if st.button("📊 Open Dashboard", width="stretch"):
         st.switch_page("pages/1_📊_Dashboard.py")
 
 with col3:
-    if st.button("📜 View History", use_container_width=True):
+    if st.button("📜 View History", width="stretch"):
         st.switch_page("pages/3_📜_History.py")
 
 with col4:
-    if st.button("⚙️ Settings", use_container_width=True):
+    if st.button("⚙️ Settings", width="stretch"):
         st.switch_page("pages/4_⚙️_Settings.py")
 
 st.markdown("---")

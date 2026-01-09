@@ -18,7 +18,7 @@ st.set_page_config(
     layout="wide"
 )
 
-from app import get_db_connection
+from utils.database import get_db_connection
 from utils.config_manager import ConfigManager
 
 st.title("⚙️ Settings & Configuration")

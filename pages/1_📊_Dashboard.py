@@ -22,7 +22,7 @@ st.set_page_config(
     layout="wide"
 )
 
-from app import get_db_connection
+from utils.database import get_db_connection
 
 st.title("📊 Executive Dashboard")
 st.markdown("Real-time cloud cost optimization metrics")
@@ -119,7 +119,7 @@ with col1:
                      title="Daily Waste Detected (€/month)",
                      labels={'total_waste': 'Waste (€/month)', 'date': 'Date'})
         fig.update_traces(line_color='#ff6b6b')
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No data available yet")
 
@@ -139,7 +139,7 @@ with col2:
     if not df.empty:
         fig = px.pie(df, values='count', names='recommendation_type',
                     title="Recommendation Distribution")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No pending recommendations")
 
@@ -182,7 +182,7 @@ if not df.empty:
             )
         },
         hide_index=True,
-        use_container_width=True
+        width="stretch"
     )
 else:
     st.info("No waste detected yet")

@@ -22,7 +22,7 @@ st.set_page_config(
 )
 
 # Import database connection from main app
-from app import get_db_connection
+from utils.database import get_db_connection
 
 # Import remediator integration
 from utils.remediator import RemediatorProxy, check_backend_available, get_backend_path
@@ -70,7 +70,7 @@ try:
 
     with col_settings:
         st.markdown("###")  # Spacing
-        if st.button("⚙️ All Settings", key="goto_settings_btn", use_container_width=True):
+        if st.button("⚙️ All Settings", key="goto_settings_btn", width="stretch"):
             st.switch_page("pages/4_⚙️_Settings.py")
 
     # Schedule restrictions info and toggle
@@ -88,7 +88,7 @@ try:
             st.caption("💡 Schedule safeguard prevents execution outside maintenance windows")
 
         with col_schedule_toggle:
-            if st.button("🔓 Disable Schedule", key="disable_schedule_btn", use_container_width=True, type="secondary"):
+            if st.button("🔓 Disable Schedule", key="disable_schedule_btn", width="stretch", type="secondary"):
                 if config_manager.disable_schedule_restrictions():
                     st.success("✅ Schedule restrictions disabled - execution allowed anytime!")
                     st.rerun()
@@ -103,7 +103,7 @@ try:
             st.caption("ℹ️ For production, consider enabling schedule restrictions")
 
         with col_schedule_toggle:
-            if st.button("🔒 Enable Schedule", key="enable_schedule_btn", use_container_width=True, type="secondary"):
+            if st.button("🔒 Enable Schedule", key="enable_schedule_btn", width="stretch", type="secondary"):
                 # Restore default schedule (weekends, 2-5am)
                 if config_manager.enable_schedule_restrictions(
                     days=["Saturday", "Sunday"],
@@ -267,7 +267,7 @@ else:
             )
         },
         hide_index=True,
-        use_container_width=True
+        width="stretch"
     )
 
     st.markdown("---")
@@ -329,7 +329,7 @@ else:
             button_label = "✅ Execute Selected" if action_type != "Approve (Execute)" else "⚡ EXECUTE ON AWS"
             button_type = "primary" if action_type != "Approve (Execute)" else "secondary"
 
-            if st.button(button_label, type=button_type, use_container_width=True, disabled=button_disabled, key="execute_btn"):
+            if st.button(button_label, type=button_type, width="stretch", disabled=button_disabled, key="execute_btn"):
                 if action_type == "Reject":
                     # Reject recommendations
                     try:
@@ -417,7 +417,7 @@ else:
                             st.code(traceback.format_exc())
 
         with col2:
-            if st.button("📊 View Details", use_container_width=True):
+            if st.button("📊 View Details", width="stretch"):
                 if selected_ids:
                     st.markdown("### 📋 Selected Recommendations Details")
                     for rec_id in selected_ids:
@@ -439,7 +439,7 @@ else:
                             st.write(f"**Confidence:** {confidence:.0%}")
 
         with col3:
-            if st.button("🔄 Refresh Data", use_container_width=True):
+            if st.button("🔄 Refresh Data", width="stretch"):
                 st.cache_data.clear()
                 st.rerun()
 

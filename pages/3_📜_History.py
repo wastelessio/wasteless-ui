@@ -20,7 +20,7 @@ st.set_page_config(
     layout="wide"
 )
 
-from app import get_db_connection
+from utils.database import get_db_connection
 
 st.title("📜 Action History")
 st.markdown("Complete audit trail of all remediation actions")
@@ -166,7 +166,7 @@ else:
             )
         },
         hide_index=True,
-        use_container_width=True
+        width="stretch"
     )
 
     # Show errors if any
@@ -213,7 +213,7 @@ if not df_rollback.empty:
             "can_rollback": st.column_config.CheckboxColumn("Available")
         },
         hide_index=True,
-        use_container_width=True
+        width="stretch"
     )
 
     st.info("💡 Rollback functionality coming soon!")
