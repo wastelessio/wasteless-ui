@@ -65,15 +65,7 @@ def show_loading_animation():
     }
 
     .logo-container {
-        margin-bottom: 60px;
-        animation: pulse 2s ease-in-out infinite;
-    }
-
-    .logo-container h1 {
-        color: white;
-        font-size: 4rem;
-        margin: 0;
-        text-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 40px;
     }
 
     @keyframes pulse {
@@ -133,9 +125,6 @@ def show_loading_animation():
 
         placeholder.markdown(f"""
         <div class="loading-container">
-            <div class="logo-container">
-                <h1>🌱</h1>
-            </div>
             <div class="loading-text">
                 {html_words}
             </div>

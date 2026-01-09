@@ -16,18 +16,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 st.set_page_config(
     page_title="History - Wasteless.io",
-    page_icon="📜",
+    page_icon="static/images/favicon.svg",
     layout="wide"
 )
 
-from utils.database import get_db_connection
+from utils.sidebar import setup_sidebar
 
 st.title("📜 Action History")
 st.markdown("Complete audit trail of all remediation actions")
 st.markdown("---")
 
-# Get database connection
-conn = get_db_connection()
+# Setup sidebar and get database connection
+conn = setup_sidebar()
 if not conn:
     st.error("❌ Cannot connect to database")
     st.stop()

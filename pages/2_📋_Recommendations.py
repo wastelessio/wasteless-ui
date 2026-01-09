@@ -17,12 +17,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 st.set_page_config(
     page_title="Recommendations - Wasteless.io",
-    page_icon="📋",
+    page_icon="static/images/favicon.svg",
     layout="wide"
 )
 
-# Import database connection from main app
-from utils.database import get_db_connection
+# Import utilities
+from utils.sidebar import setup_sidebar
 
 # Import remediator integration
 from utils.remediator import RemediatorProxy, check_backend_available, get_backend_path
@@ -119,8 +119,8 @@ except Exception as e:
 
 st.markdown("---")
 
-# Get database connection
-conn = get_db_connection()
+# Setup sidebar and get database connection
+conn = setup_sidebar()
 if not conn:
     st.error("❌ Cannot connect to database")
     st.stop()
