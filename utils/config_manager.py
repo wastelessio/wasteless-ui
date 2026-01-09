@@ -11,6 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Path to backend config file
+# wasteless-ui/utils/ -> go up 2 levels -> wasteless/
 BACKEND_PATH = os.path.abspath(os.path.join(
     os.path.dirname(__file__),
     '..', '..',
