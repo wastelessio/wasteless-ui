@@ -19,8 +19,14 @@ fi
 # Activate virtual environment
 source venv/bin/activate
 
-# Start Streamlit on port 8888
+# Start Streamlit on port 8888 with performance optimizations
 echo "📊 Starting Streamlit on http://localhost:8888"
-streamlit run app.py --server.port 8888 --server.address localhost
+echo "⏱️  Measuring startup time..."
+time streamlit run app.py \
+    --server.port 8888 \
+    --server.address localhost \
+    --server.headless true \
+    --server.runOnSave true \
+    --client.toolbarMode minimal
 
 # Note: Press Ctrl+C to stop the server
