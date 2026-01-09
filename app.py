@@ -41,6 +41,13 @@ st.set_page_config(
     }
 )
 
+# Show loading animation on first load
+if 'app_loaded' not in st.session_state:
+    from utils.loading_animation import show_loading_animation
+    show_loading_animation()
+    st.session_state.app_loaded = True
+    st.rerun()
+
 # Apply design system styles
 apply_global_styles()
 
