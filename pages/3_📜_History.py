@@ -20,7 +20,11 @@ st.set_page_config(
     layout="wide"
 )
 
+from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
+
+# Show page transition on first load
+transition_on_first_load("History")
 
 st.title("📜 Action History")
 st.markdown("Complete audit trail of all remediation actions")

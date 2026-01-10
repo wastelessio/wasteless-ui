@@ -22,7 +22,11 @@ st.set_page_config(
     layout="wide"
 )
 
+from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
+
+# Show page transition on first load
+transition_on_first_load("Dashboard")
 
 st.title("📊 Executive Dashboard")
 st.markdown("Real-time cloud cost optimization metrics")

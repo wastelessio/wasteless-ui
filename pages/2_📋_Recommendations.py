@@ -22,7 +22,11 @@ st.set_page_config(
 )
 
 # Import utilities
+from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
+
+# Show page transition on first load
+transition_on_first_load("Recommendations")
 
 # Import remediator integration
 from utils.remediator import RemediatorProxy, check_backend_available, get_backend_path

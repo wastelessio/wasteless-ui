@@ -22,8 +22,3 @@ fastReruns = true
 [browser]
 # Skip browser auto-open for faster startup
 gatherUsageStats = false
-
-[ui]
-# Hide the "app" label in sidebar navigation
-hideTopBar = false
-hideSidebarNav = false

@@ -18,8 +18,12 @@ st.set_page_config(
     layout="wide"
 )
 
+from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
 from utils.config_manager import ConfigManager
+
+# Show page transition on first load
+transition_on_first_load("Settings")
 
 st.title("⚙️ Settings & Configuration")
 st.markdown("Manage auto-remediation policies and safeguards")

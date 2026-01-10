@@ -41,12 +41,16 @@ st.set_page_config(
     }
 )
 
-# Show loading animation on first load
+# Show loading animation on first app launch
 if 'app_loaded' not in st.session_state:
     from utils.loading_animation import show_loading_animation
     show_loading_animation()
     st.session_state.app_loaded = True
     st.rerun()
+
+# Show page transition on first page load
+from utils.page_transition import transition_on_first_load
+transition_on_first_load("Home")
 
 # Apply design system styles
 apply_global_styles()
@@ -207,8 +211,7 @@ if not conn:
     st.stop()
 
 # Main page content - Title only (logo is in sidebar)
-st.markdown('<h1 class="main-header">Cloud Cost Optimization</h1>', unsafe_allow_html=True)
-st.markdown("**Autonomous detection and execution. Stop waste, save money.**")
+st.markdown('<h1 class="main-header">W A S T E L E S S</h1>', unsafe_allow_html=True)
 st.markdown("---")
 
 # Welcome section - Display metrics
