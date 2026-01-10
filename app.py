@@ -58,9 +58,16 @@ apply_global_styles()
 # Custom CSS for better styling (deprecated - kept for compatibility)
 st.markdown("""
 <style>
-    /* Hide the "app" label in sidebar navigation */
+    /* Hide the "app" or "Home" label in sidebar navigation */
     [data-testid="stSidebarNav"] li:first-child {
-        display: none;
+        display: none !important;
+    }
+    [data-testid="stSidebarNav"] > ul > li:first-child {
+        display: none !important;
+    }
+    /* Also hide any link with "app" or "Home" text */
+    [data-testid="stSidebarNav"] a[href*="app"] {
+        display: none !important;
     }
 
     .main-header {

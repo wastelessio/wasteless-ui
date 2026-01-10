@@ -7,26 +7,14 @@ import os
 
 def setup_sidebar():
     """
-    Setup consistent sidebar with logo and database connection.
+    Setup consistent sidebar with database connection.
 
     Best practices:
-    - Logo at top of sidebar
-    - Consistent branding across all pages
+    - Clean navigation without logo
     - Streamlit handles navigation automatically (no manual links needed)
+    - Database status at bottom
     """
-    # Get absolute path to logo
-    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logo_path = os.path.join(current_dir, "static", "images", "logo.svg")
-
-    if os.path.exists(logo_path):
-        # Display logo
-        st.sidebar.image(logo_path, use_container_width=True)
-    else:
-        st.sidebar.title("Wasteless")
-
-    st.sidebar.markdown("---")
-
-    # Connection status at bottom of sidebar
+    # Connection status
     from utils.database import get_db_connection
     conn = get_db_connection()
     if conn:
