@@ -58,16 +58,30 @@ apply_global_styles()
 # Custom CSS for better styling (deprecated - kept for compatibility)
 st.markdown("""
 <style>
-    /* Hide the "app" or "Home" label in sidebar navigation */
+    /* Replace "app" text with "Wasteless" styled button */
+    /* Hide all text inside the first nav item */
+    [data-testid="stSidebarNav"] li:first-child * {
+        font-size: 0 !important;
+        color: transparent !important;
+    }
+    [data-testid="stSidebarNav"] li:first-child a {
+        font-size: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        background-color: #6B8E4E !important;
+        padding: 0.5rem 1rem !important;
+        border-radius: 0.5rem !important;
+        justify-content: center !important;
+    }
+    [data-testid="stSidebarNav"] li:first-child a::before {
+        content: "WASTELESS";
+        font-size: 1.1rem !important;
+        font-weight: 600;
+        color: #2d2d2d !important;
+        letter-spacing: -0.5px;
+    }
     [data-testid="stSidebarNav"] li:first-child {
-        display: none !important;
-    }
-    [data-testid="stSidebarNav"] > ul > li:first-child {
-        display: none !important;
-    }
-    /* Also hide any link with "app" or "Home" text */
-    [data-testid="stSidebarNav"] a[href*="app"] {
-        display: none !important;
+        margin-bottom: 0.5rem !important;
     }
 
     .main-header {
