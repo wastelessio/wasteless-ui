@@ -4,6 +4,7 @@ Recommendations Page
 ====================
 
 View, filter, and manage cost optimization recommendations.
+Optimized with cached queries for better performance.
 """
 
 import streamlit as st
@@ -11,6 +12,7 @@ import pandas as pd
 import sys
 import os
 from datetime import datetime
+import time
 
 # Add parent directory to path to import app utilities
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,12 +20,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 st.set_page_config(
     page_title="Recommendations - Wasteless.io",
     page_icon="static/images/favicon.svg",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # Import utilities
 from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
+from utils.logger import get_logger, log_db_query, log_error
 
 # Show page transition on first load
 transition_on_first_load("Recommendations")
@@ -31,6 +35,75 @@ transition_on_first_load("Recommendations")
 # Import remediator integration
 from utils.remediator import RemediatorProxy, check_backend_available, get_backend_path
 from utils.config_manager import ConfigManager
+
+# Cached data fetching function
+@st.cache_data(ttl=30)
+def fetch_recommendations(_conn, rec_type_filter="All", min_savings=0, min_confidence=0.0):
+    """
+    Fetch recommendations with filters applied.
+    Cached for 30 seconds to avoid repeated queries on UI interactions.
+
+    Args:
+        _conn: Database connection (underscore prefix excludes from cache key)
+        rec_type_filter: Filter by recommendation type
+        min_savings: Minimum monthly savings filter
+        min_confidence: Minimum confidence score filter
+
+    Returns:
+        DataFrame with filtered recommendations or empty DataFrame on error
+    """
+    logger = get_logger('data')
+    start_time = time.time()
+
+    try:
+        # Build query
+        query = """
+            SELECT
+                r.id,
+                r.recommendation_type,
+                w.resource_id,
+                r.estimated_monthly_savings_eur,
+                w.confidence_score,
+                r.action_required,
+                r.status,
+                r.created_at,
+                w.metadata->>'instance_type' as instance_type,
+                (w.metadata->>'cpu_avg_7d')::numeric as cpu_avg
+            FROM recommendations r
+            JOIN waste_detected w ON r.waste_id = w.id
+            WHERE r.status = 'pending'
+        """
+
+        # Apply filters
+        params = []
+        if rec_type_filter != "All":
+            query += " AND r.recommendation_type = %s"
+            params.append(rec_type_filter)
+
+        if min_savings > 0:
+            query += " AND r.estimated_monthly_savings_eur >= %s"
+            params.append(min_savings)
+
+        if min_confidence > 0:
+            query += " AND w.confidence_score >= %s"
+            params.append(min_confidence)
+
+        query += " ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500"
+
+        # Execute query
+        df = pd.read_sql(query, _conn, params=params if params else None)
+
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_recommendations', duration_ms, success=True)
+
+        return df
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_recommendations', duration_ms, success=False)
+        log_error(e, context='fetch_recommendations')
+        st.error(f"❌ Failed to fetch recommendations: {e}")
+        return pd.DataFrame()
 
 st.title("📋 Cost Optimization Recommendations")
 st.markdown("Review and manage idle resource recommendations")
@@ -159,42 +232,14 @@ with col3:
 
 st.markdown("---")
 
-# Build query
-query = """
-    SELECT
-        r.id,
-        r.recommendation_type,
-        w.resource_id,
-        r.estimated_monthly_savings_eur,
-        w.confidence_score,
-        r.action_required,
-        r.status,
-        r.created_at,
-        w.metadata->>'instance_type' as instance_type,
-        (w.metadata->>'cpu_avg_7d')::numeric as cpu_avg
-    FROM recommendations r
-    JOIN waste_detected w ON r.waste_id = w.id
-    WHERE r.status = 'pending'
-"""
-
-# Apply filters
-params = []
-if rec_type_filter != "All":
-    query += " AND r.recommendation_type = %s"
-    params.append(rec_type_filter)
-
-if min_savings > 0:
-    query += " AND r.estimated_monthly_savings_eur >= %s"
-    params.append(min_savings)
-
-if min_confidence > 0:
-    query += " AND w.confidence_score >= %s"
-    params.append(min_confidence)
-
-query += " ORDER BY r.estimated_monthly_savings_eur DESC"
-
-# Execute query
-df = pd.read_sql(query, conn, params=params if params else None)
+# Fetch recommendations with caching
+with st.spinner("Loading recommendations..."):
+    df = fetch_recommendations(
+        conn,
+        rec_type_filter=rec_type_filter,
+        min_savings=min_savings,
+        min_confidence=min_confidence
+    )
 
 # Display summary
 col1, col2, col3 = st.columns(3)
@@ -473,3 +518,10 @@ with st.expander("ℹ️ Help - Understanding Recommendations"):
     All recommendations are filtered through 7-layer safeguards before execution.
     Protected instances (production, critical tags) are never recommended.
     """)
+
+# Add refresh button in sidebar
+with st.sidebar:
+    st.markdown("---")
+    if st.button("🔄 Refresh Data", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
