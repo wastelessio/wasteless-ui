@@ -1,32 +1,39 @@
 #!/bin/bash
-# Wasteless UI - Start Script
-# ============================
+# Start Wasteless UI with Streamlit
 
-echo "🚀 Starting Wasteless UI..."
+cd "$(dirname "$0")"
 
-# Check if PostgreSQL is running
-if ! docker ps | grep -q wasteless-postgres; then
-    echo "⚠️  WARNING: PostgreSQL container is not running!"
-    echo "   Start it with: cd ../wasteless && docker-compose up -d"
-    echo ""
-    read -p "Continue anyway? (y/n) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
+# Check if .env exists
+if [ ! -f .env ]; then
+    echo "❌ .env file not found!"
+    echo "Please create a .env file with database credentials"
+    exit 1
 fi
 
-# Activate virtual environment
-source venv/bin/activate
+# Activate virtual environment if it exists
+if [ -d "venv" ]; then
+    echo "🔧 Activating virtual environment..."
+    source venv/bin/activate
+elif [ -d ".venv" ]; then
+    echo "🔧 Activating virtual environment..."
+    source .venv/bin/activate
+else
+    echo "⚠️  No virtual environment found. Using system Python."
+fi
 
-# Start Streamlit on port 8888 with performance optimizations
-echo "📊 Starting Streamlit on http://localhost:8888"
-echo "⏱️  Measuring startup time..."
-time streamlit run app.py \
+# Check if streamlit is installed
+if ! command -v streamlit &> /dev/null; then
+    echo "❌ Streamlit is not installed!"
+    echo "Please install dependencies: pip install -r requirements.txt"
+    exit 1
+fi
+
+echo "🚀 Starting Wasteless UI on http://localhost:8888"
+
+# Start Streamlit (no need to export env vars, load_dotenv handles it)
+streamlit run app.py \
     --server.port 8888 \
     --server.address localhost \
     --server.headless true \
     --server.runOnSave true \
     --client.toolbarMode minimal
-
-# Note: Press Ctrl+C to stop the server

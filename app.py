@@ -20,13 +20,17 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from utils.logger import get_logger, log_user_action, log_db_query, log_error
 from utils.design_system import apply_global_styles, Colors
 import time
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from the correct location
+# Get the directory where this app.py file is located
+APP_DIR = Path(__file__).parent
+ENV_PATH = APP_DIR / '.env'
+load_dotenv(dotenv_path=ENV_PATH)
 
 # Page configuration
 st.set_page_config(
