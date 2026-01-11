@@ -4,6 +4,7 @@ History Page
 ============
 
 Complete audit trail of all remediation actions.
+Optimized with cached queries for better performance.
 """
 
 import streamlit as st
@@ -11,6 +12,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import sys
 import os
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -22,9 +24,106 @@ st.set_page_config(
 
 from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
+from utils.logger import get_logger, log_db_query, log_error
 
 # Show page transition on first load
 transition_on_first_load("History")
+
+# Cached data fetching functions
+@st.cache_data(ttl=30)
+def fetch_action_history(_conn, status_filter="All", action_filter="All",
+                         days_back=30, dry_run_filter="All"):
+    """
+    Fetch action history with filters applied. Cached for 30 seconds.
+    Returns DataFrame with action details or empty DataFrame on error.
+    """
+    logger = get_logger('data')
+    start_time = time.time()
+
+    try:
+        query = """
+            SELECT
+                a.id,
+                a.resource_id,
+                a.action_type,
+                a.action_status,
+                a.dry_run,
+                a.action_date,
+                a.error_message,
+                a.executed_by,
+                r.estimated_monthly_savings_eur
+            FROM actions_log a
+            LEFT JOIN recommendations r ON a.recommendation_id = r.id
+            WHERE a.action_date >= NOW() - INTERVAL '%s days'
+        """
+
+        params = [days_back]
+
+        if status_filter != "All":
+            query += " AND a.action_status = %s"
+            params.append(status_filter)
+
+        if action_filter != "All":
+            query += " AND a.action_type = %s"
+            params.append(action_filter)
+
+        if dry_run_filter == "Dry-Run Only":
+            query += " AND a.dry_run = TRUE"
+        elif dry_run_filter == "Production Only":
+            query += " AND a.dry_run = FALSE"
+
+        query += " ORDER BY a.action_date DESC LIMIT 100"
+
+        df = pd.read_sql(query, _conn, params=tuple(params))
+
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_action_history', duration_ms, success=True)
+        return df
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_action_history', duration_ms, success=False)
+        log_error(e, context='fetch_action_history')
+        st.error(f"❌ Failed to fetch action history: {e}")
+        return pd.DataFrame()
+
+@st.cache_data(ttl=60)
+def fetch_rollback_candidates(_conn):
+    """
+    Fetch available rollback snapshots. Cached for 60 seconds.
+    Returns DataFrame with rollback candidates or empty DataFrame on error.
+    """
+    logger = get_logger('data')
+    start_time = time.time()
+
+    try:
+        query = """
+            SELECT
+                rs.id,
+                rs.resource_id,
+                rs.created_at,
+                rs.rollback_expiry,
+                rs.can_rollback,
+                a.action_type
+            FROM rollback_snapshots rs
+            JOIN actions_log a ON rs.action_log_id = a.id
+            WHERE rs.can_rollback = TRUE
+              AND rs.rollback_expiry > NOW()
+            ORDER BY rs.created_at DESC
+        """
+
+        df = pd.read_sql(query, _conn)
+
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_rollback_candidates', duration_ms, success=True)
+        return df
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_rollback_candidates', duration_ms, success=False)
+        log_error(e, context='fetch_rollback_candidates')
+        st.error(f"❌ Failed to fetch rollback candidates: {e}")
+        return pd.DataFrame()
 
 st.title("📜 Action History")
 st.markdown("Complete audit trail of all remediation actions")
@@ -67,42 +166,9 @@ with col4:
 
 st.markdown("---")
 
-# Build query
-query = """
-    SELECT
-        a.id,
-        a.resource_id,
-        a.action_type,
-        a.action_status,
-        a.dry_run,
-        a.action_date,
-        a.error_message,
-        a.executed_by,
-        r.estimated_monthly_savings_eur
-    FROM actions_log a
-    LEFT JOIN recommendations r ON a.recommendation_id = r.id
-    WHERE a.action_date >= NOW() - INTERVAL '%s days'
-"""
-
-params = [days_back]
-
-if status_filter != "All":
-    query += " AND a.action_status = %s"
-    params.append(status_filter)
-
-if action_filter != "All":
-    query += " AND a.action_type = %s"
-    params.append(action_filter)
-
-if dry_run_filter == "Dry-Run Only":
-    query += " AND a.dry_run = TRUE"
-elif dry_run_filter == "Production Only":
-    query += " AND a.dry_run = FALSE"
-
-query += " ORDER BY a.action_date DESC LIMIT 100"
-
-# Execute query
-df = pd.read_sql(query, conn, params=tuple(params))
+# Fetch action history with filters
+with st.spinner("Loading action history..."):
+    df = fetch_action_history(conn, status_filter, action_filter, days_back, dry_run_filter)
 
 # Display summary
 col1, col2, col3, col4 = st.columns(4)
@@ -189,21 +255,8 @@ st.markdown("---")
 # Rollback section
 st.subheader("🔄 Rollback Available")
 
-query = """
-    SELECT
-        rs.id,
-        rs.resource_id,
-        rs.created_at,
-        rs.rollback_expiry,
-        rs.can_rollback,
-        a.action_type
-    FROM rollback_snapshots rs
-    JOIN actions_log a ON rs.action_log_id = a.id
-    WHERE rs.can_rollback = TRUE
-      AND rs.rollback_expiry > NOW()
-    ORDER BY rs.created_at DESC
-"""
-df_rollback = pd.read_sql(query, conn)
+with st.spinner("Loading rollback candidates..."):
+    df_rollback = fetch_rollback_candidates(conn)
 
 if not df_rollback.empty:
     st.dataframe(
@@ -223,3 +276,10 @@ if not df_rollback.empty:
     st.info("💡 Rollback functionality coming soon!")
 else:
     st.info("No rollback snapshots available")
+
+# Add refresh button in sidebar
+with st.sidebar:
+    st.markdown("---")
+    if st.button("🔄 Refresh History", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
