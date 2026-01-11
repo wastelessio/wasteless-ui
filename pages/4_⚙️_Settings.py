@@ -4,11 +4,13 @@ Settings Page
 =============
 
 Manage safeguards and auto-remediation configuration.
+Optimized with cached queries for better performance.
 """
 
 import streamlit as st
 import sys
 import os
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -21,9 +23,58 @@ st.set_page_config(
 from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
 from utils.config_manager import ConfigManager
+from utils.logger import get_logger, log_db_query, log_error
 
 # Show page transition on first load
 transition_on_first_load("Settings")
+
+# Cached data fetching functions
+@st.cache_data(ttl=60)
+def fetch_database_stats(_conn):
+    """
+    Fetch database table counts in a single optimized query.
+    Uses CTE to fetch all counts efficiently. Cached for 60 seconds.
+    Returns dict with table counts or None on error.
+    """
+    logger = get_logger('data')
+    start_time = time.time()
+
+    try:
+        query = """
+            WITH counts AS (
+                SELECT
+                    (SELECT COUNT(*) FROM ec2_metrics) as ec2_metrics,
+                    (SELECT COUNT(*) FROM waste_detected) as waste_detected,
+                    (SELECT COUNT(*) FROM recommendations) as recommendations,
+                    (SELECT COUNT(*) FROM actions_log) as actions_log,
+                    (SELECT COUNT(*) FROM savings_realized) as savings_realized
+            )
+            SELECT * FROM counts;
+        """
+
+        cursor = _conn.cursor()
+        cursor.execute(query)
+        result = cursor.fetchone()
+        cursor.close()
+
+        if result:
+            duration_ms = (time.time() - start_time) * 1000
+            log_db_query('fetch_database_stats', duration_ms, success=True)
+            return {
+                'ec2_metrics': int(result[0]),
+                'waste_detected': int(result[1]),
+                'recommendations': int(result[2]),
+                'actions_log': int(result[3]),
+                'savings_realized': int(result[4])
+            }
+        return None
+
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        log_db_query('fetch_database_stats', duration_ms, success=False)
+        log_error(e, context='fetch_database_stats')
+        st.error(f"❌ Failed to fetch database stats: {e}")
+        return None
 
 st.title("⚙️ Settings & Configuration")
 st.markdown("Manage auto-remediation policies and safeguards")
@@ -339,34 +390,28 @@ st.markdown("---")
 
 st.subheader("💾 Database Statistics")
 
-cursor = conn.cursor()
+with st.spinner("Loading database statistics..."):
+    stats = fetch_database_stats(conn)
 
-stats = {}
+if stats:
+    col1, col2, col3, col4, col5 = st.columns(5)
 
-tables = ['ec2_metrics', 'waste_detected', 'recommendations', 'actions_log', 'savings_realized']
+    with col1:
+        st.metric("Metrics", f"{stats['ec2_metrics']:,}")
 
-for table in tables:
-    cursor.execute(f"SELECT COUNT(*) FROM {table}")
-    stats[table] = cursor.fetchone()[0]
+    with col2:
+        st.metric("Waste", stats['waste_detected'])
 
-cursor.close()
+    with col3:
+        st.metric("Recommendations", stats['recommendations'])
 
-col1, col2, col3, col4, col5 = st.columns(5)
+    with col4:
+        st.metric("Actions", stats['actions_log'])
 
-with col1:
-    st.metric("Metrics", f"{stats['ec2_metrics']:,}")
-
-with col2:
-    st.metric("Waste", stats['waste_detected'])
-
-with col3:
-    st.metric("Recommendations", stats['recommendations'])
-
-with col4:
-    st.metric("Actions", stats['actions_log'])
-
-with col5:
-    st.metric("Savings", stats['savings_realized'])
+    with col5:
+        st.metric("Savings", stats['savings_realized'])
+else:
+    st.warning("⚠️ Unable to load database statistics")
 
 st.markdown("---")
 
@@ -409,3 +454,10 @@ with st.expander("ℹ️ Help - Understanding Settings"):
 
 # Config file path info
 st.caption(f"📁 Configuration file: `{config_manager.config_path}`")
+
+# Add refresh button in sidebar
+with st.sidebar:
+    st.markdown("---")
+    if st.button("🔄 Refresh Settings", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
