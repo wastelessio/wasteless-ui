@@ -59,35 +59,9 @@ transition_on_first_load("Home")
 # Apply design system styles
 apply_global_styles()
 
-# Custom CSS for better styling (deprecated - kept for compatibility)
+# Custom CSS for page-specific styling
 st.markdown("""
 <style>
-    /* Replace "app" text with "Wasteless" styled button */
-    /* Hide all text inside the first nav item */
-    [data-testid="stSidebarNav"] li:first-child * {
-        font-size: 0 !important;
-        color: transparent !important;
-    }
-    [data-testid="stSidebarNav"] li:first-child a {
-        font-size: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        background-color: #6B8E4E !important;
-        padding: 0.5rem 1rem !important;
-        border-radius: 0.5rem !important;
-        justify-content: center !important;
-    }
-    [data-testid="stSidebarNav"] li:first-child a::before {
-        content: "WASTELESS";
-        font-size: 1.1rem !important;
-        font-weight: 600;
-        color: #2d2d2d !important;
-        letter-spacing: -0.5px;
-    }
-    [data-testid="stSidebarNav"] li:first-child {
-        margin-bottom: 0.5rem !important;
-    }
-
     .main-header {
         font-size: 2.5rem;
         font-weight: 700;
@@ -117,26 +91,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# Database connection utility
-@st.cache_resource
-def get_db_connection():
-    """Get PostgreSQL database connection."""
-    import psycopg2
-
-    try:
-        conn = psycopg2.connect(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5432'),
-            database=os.getenv('DB_NAME', 'wasteless'),
-            user=os.getenv('DB_USER', 'wasteless'),
-            password=os.getenv('DB_PASSWORD', 'wasteless_dev_2025')
-        )
-        return conn
-    except Exception as e:
-        st.error(f"❌ Database connection failed: {e}")
-        st.info("💡 Make sure PostgreSQL is running and credentials are correct in .env")
-        return None
 
 @st.cache_data(ttl=30)
 def fetch_home_metrics(_conn):
