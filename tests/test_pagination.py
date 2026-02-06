@@ -1,17 +1,28 @@
 """
 Unit tests for pagination utility
+
+Note: Requires pandas to be installed (run within venv).
 """
 import unittest
-import pandas as pd
 import sys
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.pagination import paginate_dataframe
+# Check for pandas availability
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+    pd = None
+
+if PANDAS_AVAILABLE:
+    from utils.pagination import paginate_dataframe
 
 
+@unittest.skipUnless(PANDAS_AVAILABLE, "pandas not installed")
 class TestPagination(unittest.TestCase):
     """Test cases for pagination functionality."""
 
@@ -84,6 +95,7 @@ class TestPagination(unittest.TestCase):
         self.assertEqual(items_on_last_page, 7)
 
 
+@unittest.skipUnless(PANDAS_AVAILABLE, "pandas not installed")
 class TestDataFrameSlicing(unittest.TestCase):
     """Test dataframe slicing operations."""
 
