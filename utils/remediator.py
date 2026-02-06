@@ -11,9 +11,11 @@ Author: Wasteless Team
 
 import os
 import sys
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime, date
+import threading
+from contextlib import contextmanager
 
 # Add backend path to sys.path to import backend modules
 # Path structure: wasteless-ui/utils/ -> go up 2 levels -> wasteless/
@@ -23,10 +25,43 @@ BACKEND_PATH = os.path.abspath(os.path.join(
     'wasteless'
 ))
 
-if os.path.exists(BACKEND_PATH):
-    sys.path.insert(0, BACKEND_PATH)
+# Thread lock for protecting remediator initialization
+_remediator_lock = threading.Lock()
+
+# Backend availability status (cached after first check)
+_backend_available: Optional[bool] = None
+_backend_check_error: Optional[str] = None
+
+
+def _check_backend_path() -> tuple[bool, Optional[str]]:
+    """
+    Check if the backend path exists and contains required modules.
+
+    Returns:
+        Tuple of (is_available, error_message)
+    """
+    if not os.path.exists(BACKEND_PATH):
+        return False, f"Backend directory not found: {BACKEND_PATH}"
+
+    # Check for required backend structure
+    src_path = os.path.join(BACKEND_PATH, 'src')
+    if not os.path.exists(src_path):
+        return False, f"Backend 'src' directory not found: {src_path}"
+
+    remediator_path = os.path.join(src_path, 'remediators', 'ec2_remediator.py')
+    if not os.path.exists(remediator_path):
+        return False, f"EC2Remediator module not found: {remediator_path}"
+
+    return True, None
+
+
+# Initialize backend path check
+_backend_exists, _backend_error = _check_backend_path()
+if _backend_exists:
+    if BACKEND_PATH not in sys.path:
+        sys.path.insert(0, BACKEND_PATH)
 else:
-    logging.warning(f"Backend path not found: {BACKEND_PATH}")
+    logging.warning(f"Backend not available: {_backend_error}")
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +88,36 @@ def sanitize_for_json(obj: Any) -> Any:
         return obj
 
 
+@contextmanager
+def _backend_context():
+    """
+    Context manager to safely set up backend environment without changing cwd.
+
+    Instead of os.chdir() (which is not thread-safe), we temporarily modify
+    environment variables that the backend might use for config file paths.
+    """
+    original_env = os.environ.copy()
+    try:
+        # Set environment variable for backend config path instead of changing cwd
+        os.environ['WASTELESS_CONFIG_DIR'] = os.path.join(BACKEND_PATH, 'config')
+        os.environ['WASTELESS_BACKEND_PATH'] = BACKEND_PATH
+        yield
+    finally:
+        # Restore original environment
+        os.environ.clear()
+        os.environ.update(original_env)
+
+
 class RemediatorProxy:
     """
     Proxy class to execute remediation actions via the backend engine.
 
     This provides a clean interface for the UI to trigger backend operations.
+    Thread-safe initialization with proper error handling.
     """
+
+    # Class-level cache for the remediator instance (per dry_run mode)
+    _instances: Dict[bool, Any] = {}
 
     def __init__(self, dry_run: bool = True):
         """
@@ -66,40 +125,68 @@ class RemediatorProxy:
 
         Args:
             dry_run: If True, no actual AWS actions are executed
+
+        Raises:
+            RuntimeError: If backend is not available
         """
         self.dry_run = dry_run
         self._remediator = None
 
+        # Early validation of backend availability
+        if not _backend_exists:
+            raise RuntimeError(
+                f"Backend not available: {_backend_error}\n"
+                f"Please ensure wasteless backend is cloned at: {BACKEND_PATH}"
+            )
+
     def _get_remediator(self):
-        """Lazy load the EC2Remediator from backend."""
-        if self._remediator is None:
+        """
+        Lazy load the EC2Remediator from backend.
+
+        Thread-safe initialization using a lock to prevent race conditions.
+        No os.chdir() is used - instead we set environment variables.
+        """
+        if self._remediator is not None:
+            return self._remediator
+
+        # Thread-safe initialization
+        with _remediator_lock:
+            # Double-check after acquiring lock
+            if self._remediator is not None:
+                return self._remediator
+
+            # Check class-level cache first
+            if self.dry_run in RemediatorProxy._instances:
+                self._remediator = RemediatorProxy._instances[self.dry_run]
+                return self._remediator
+
             try:
-                # Save current directory
-                original_cwd = os.getcwd()
+                with _backend_context():
+                    # Import with timeout protection would require multiprocessing
+                    # For now, we do a simple import with good error handling
+                    from src.remediators.ec2_remediator import EC2Remediator
 
-                # Change to backend directory (EC2Remediator expects config files there)
-                os.chdir(BACKEND_PATH)
+                    # Initialize remediator - pass config path explicitly if supported
+                    config_path = os.path.join(BACKEND_PATH, 'config')
+                    self._remediator = EC2Remediator(dry_run=self.dry_run)
 
-                from src.remediators.ec2_remediator import EC2Remediator
-                self._remediator = EC2Remediator(dry_run=self.dry_run)
-                logger.info(f"✅ EC2Remediator initialized (dry_run={self.dry_run})")
+                    # Cache at class level
+                    RemediatorProxy._instances[self.dry_run] = self._remediator
 
-                # Restore original directory
-                os.chdir(original_cwd)
+                    logger.info(f"✅ EC2Remediator initialized (dry_run={self.dry_run})")
+
             except ImportError as e:
-                # Restore original directory on error
-                os.chdir(original_cwd)
                 logger.error(f"❌ Cannot import EC2Remediator: {e}")
                 logger.error(f"   Backend path: {BACKEND_PATH}")
                 logger.error(f"   Make sure wasteless backend is cloned next to wasteless-ui")
-                raise Exception(
-                    f"Cannot import backend remediator. "
-                    f"Make sure wasteless backend is installed at: {BACKEND_PATH}"
-                )
+                raise RuntimeError(
+                    f"Cannot import backend remediator: {e}\n"
+                    f"Ensure wasteless backend is installed at: {BACKEND_PATH}"
+                ) from e
             except Exception as e:
-                # Restore original directory on error
-                os.chdir(original_cwd)
-                raise
+                logger.error(f"❌ Failed to initialize EC2Remediator: {e}")
+                raise RuntimeError(f"Failed to initialize remediator: {e}") from e
+
         return self._remediator
 
     def execute_recommendations(
@@ -240,14 +327,65 @@ def check_backend_available() -> bool:
     Returns:
         True if backend can be imported, False otherwise
     """
+    global _backend_available
+
+    # Return cached result if available
+    if _backend_available is not None:
+        return _backend_available
+
+    # First check if path exists
+    if not _backend_exists:
+        _backend_available = False
+        return False
+
+    # Try to import the module
     try:
-        sys.path.insert(0, BACKEND_PATH)
+        if BACKEND_PATH not in sys.path:
+            sys.path.insert(0, BACKEND_PATH)
         from src.remediators.ec2_remediator import EC2Remediator
+        _backend_available = True
         return True
-    except ImportError:
+    except ImportError as e:
+        logger.warning(f"Backend import failed: {e}")
+        _backend_available = False
         return False
 
 
 def get_backend_path() -> str:
     """Get the expected backend path."""
     return BACKEND_PATH
+
+
+def get_backend_error() -> Optional[str]:
+    """Get the backend availability error message, if any."""
+    if _backend_exists:
+        return None
+    return _backend_error
+
+
+def validate_backend_at_startup() -> tuple[bool, str]:
+    """
+    Validate backend availability at application startup.
+
+    Returns:
+        Tuple of (is_valid, message) for display to user
+    """
+    if not _backend_exists:
+        return False, (
+            f"❌ Backend not found at: {BACKEND_PATH}\n\n"
+            f"Error: {_backend_error}\n\n"
+            f"To fix this, clone the wasteless backend:\n"
+            f"```\n"
+            f"cd {os.path.dirname(BACKEND_PATH)}\n"
+            f"git clone https://github.com/wastelessio/wasteless.git\n"
+            f"```"
+        )
+
+    if not check_backend_available():
+        return False, (
+            f"❌ Backend found but cannot import EC2Remediator\n\n"
+            f"Backend path: {BACKEND_PATH}\n\n"
+            f"Check that all dependencies are installed in the backend."
+        )
+
+    return True, "✅ Backend available and ready"
