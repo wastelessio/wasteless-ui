@@ -26,6 +26,9 @@ from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
 from utils.logger import get_logger, log_db_query, log_error
 
+# Configurable query limits (can be overridden via environment)
+MAX_HISTORY_RECORDS = int(os.getenv('MAX_HISTORY_RECORDS', '100'))
+
 # Show page transition on first load
 transition_on_first_load("History")
 
@@ -72,7 +75,7 @@ def fetch_action_history(_conn, status_filter="All", action_filter="All",
         elif dry_run_filter == "Production Only":
             query += " AND a.dry_run = FALSE"
 
-        query += " ORDER BY a.action_date DESC LIMIT 100"
+        query += f" ORDER BY a.action_date DESC LIMIT {MAX_HISTORY_RECORDS}"
 
         df = pd.read_sql(query, _conn, params=tuple(params))
 
@@ -196,15 +199,23 @@ if df.empty:
 else:
     st.subheader(f"📋 {len(df)} Actions")
 
-    # Add status emoji
+    # Handle NULL/NaN values in numeric columns
+    if 'estimated_monthly_savings_eur' in df.columns:
+        df['estimated_monthly_savings_eur'] = pd.to_numeric(
+            df['estimated_monthly_savings_eur'], errors='coerce'
+        ).fillna(0.0)
+
+    # Add status emoji with safe handling
     def status_icon(status):
+        if pd.isna(status):
+            return '❓'
         icons = {
             'success': '✅',
             'failed': '❌',
             'pending': '⏳',
             'blocked': '🛑'
         }
-        return icons.get(status, '❓')
+        return icons.get(str(status), '❓')
 
     df['status_display'] = df['action_status'].apply(status_icon)
 

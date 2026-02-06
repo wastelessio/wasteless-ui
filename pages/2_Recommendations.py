@@ -27,7 +27,11 @@ st.set_page_config(
 # Import utilities
 from utils.page_transition import transition_on_first_load
 from utils.sidebar import setup_sidebar
-from utils.logger import get_logger, log_db_query, log_error
+from utils.logger import get_logger, log_db_query, log_error, log_remediation_action
+
+# Configurable query limits (can be overridden via environment)
+MAX_RECOMMENDATIONS_PER_PAGE = int(os.getenv('MAX_RECOMMENDATIONS_PER_PAGE', '100'))
+MAX_RECOMMENDATIONS_TOTAL = int(os.getenv('MAX_RECOMMENDATIONS_TOTAL', '500'))
 
 # Show page transition on first load
 transition_on_first_load("Recommendations")
@@ -88,7 +92,7 @@ def fetch_recommendations(_conn, rec_type_filter="All", min_savings=0, min_confi
             query += " AND w.confidence_score >= %s"
             params.append(min_confidence)
 
-        query += " ORDER BY r.estimated_monthly_savings_eur DESC LIMIT 500"
+        query += f" ORDER BY r.estimated_monthly_savings_eur DESC LIMIT {MAX_RECOMMENDATIONS_TOTAL}"
 
         # Execute query
         df = pd.read_sql(query, _conn, params=params if params else None)
@@ -275,7 +279,8 @@ else:
 
     # Format dataframe for display
     df_display = df.copy()
-    df_display['cpu_avg'] = pd.to_numeric(df_display['cpu_avg'], errors='coerce')
+    # Handle NULL/NaN values in cpu_avg - convert to numeric and fill NaN with 0
+    df_display['cpu_avg'] = pd.to_numeric(df_display['cpu_avg'], errors='coerce').fillna(0.0)
 
     st.dataframe(
         df_display[[
@@ -324,6 +329,13 @@ else:
     # Action section
     st.subheader("🚀 Take Action")
 
+    # Mode indicator banner
+    st.markdown("""
+    <div style="padding: 10px; border-radius: 5px; margin-bottom: 15px; background-color: #e8f5e9; border-left: 4px solid #4caf50;">
+        <strong>🧪 DRY-RUN MODE (DEFAULT)</strong> - No real AWS actions will be executed unless you explicitly choose "Approve (Execute)"
+    </div>
+    """, unsafe_allow_html=True)
+
     col1, col2 = st.columns([2, 1])
 
     with col1:
@@ -336,38 +348,75 @@ else:
     with col2:
         st.markdown("###")  # Spacing
         action_type = st.radio(
-            "Action",
-            ["Approve (Dry-Run)", "Approve (Execute)", "Reject"],
-            help="Dry-run simulates the action without executing"
+            "Action Mode",
+            ["🧪 Dry-Run (Safe)", "⚡ EXECUTE (Production)", "❌ Reject"],
+            help="⚠️ EXECUTE will perform REAL AWS actions!",
+            captions=[
+                "Simulate action - no changes",
+                "⚠️ REAL AWS changes!",
+                "Mark as rejected"
+            ]
         )
+        # Map display names to internal values
+        action_map = {
+            "🧪 Dry-Run (Safe)": "Approve (Dry-Run)",
+            "⚡ EXECUTE (Production)": "Approve (Execute)",
+            "❌ Reject": "Reject"
+        }
+        action_type = action_map.get(action_type, action_type)
 
     if selected_ids:
         st.info(f"📌 {len(selected_ids)} recommendation(s) selected: {selected_ids}")
 
-        # Check if backend is available
+        # Check if backend is available - use validate function for detailed message
+        from utils.remediator import validate_backend_at_startup, get_backend_error
         backend_available = check_backend_available()
         if not backend_available:
-            st.warning(f"""
-            ⚠️ **Backend not found at:** `{get_backend_path()}`
+            backend_error = get_backend_error()
+            st.error(f"""
+            ❌ **Backend Not Available - Actions Disabled**
 
-            To execute actions, make sure the wasteless backend is cloned:
+            **Location checked:** `{get_backend_path()}`
+
+            **Error:** {backend_error or 'Cannot import EC2Remediator module'}
+
+            **To fix this:**
             ```bash
             cd {os.path.dirname(get_backend_path())}
             git clone https://github.com/wastelessio/wasteless.git
+            cd wasteless
+            pip install -r requirements.txt
             ```
+
+            You can still view and reject recommendations, but **Approve** actions are disabled.
             """)
 
         # Special handling for Production mode - show confirmation BEFORE button
         if action_type == "Approve (Execute)":
-            st.warning("⚠️ **PRODUCTION MODE** - This will execute REAL AWS actions!")
-            st.error("🔒 This will STOP or TERMINATE instances on your AWS account!")
+            st.markdown("""
+            <div style="padding: 15px; border-radius: 5px; margin: 10px 0; background-color: #ffebee; border: 2px solid #f44336;">
+                <h3 style="color: #c62828; margin-top: 0;">⚠️ PRODUCTION MODE SELECTED</h3>
+                <p style="color: #c62828; font-size: 16px;">
+                    <strong>This will execute REAL AWS actions on your account!</strong>
+                </p>
+                <ul style="color: #c62828;">
+                    <li>Instances will be <strong>STOPPED</strong> or <strong>TERMINATED</strong></li>
+                    <li>This action may be <strong>IRREVERSIBLE</strong> for terminated instances</li>
+                    <li>Ensure you have reviewed all selected recommendations</li>
+                </ul>
+            </div>
+            """, unsafe_allow_html=True)
 
             confirm_production = st.checkbox(
-                "✅ I understand this will modify my AWS infrastructure",
+                "✅ I CONFIRM: I understand this will modify my AWS infrastructure and have reviewed all selected recommendations",
                 key="confirm_prod_checkbox"
             )
-        else:
-            confirm_production = True  # Not needed for other actions
+        elif action_type == "Approve (Dry-Run)":
+            st.info("🧪 **DRY-RUN MODE** - Actions will be simulated. No actual AWS changes will be made.")
+            confirm_production = True
+        else:  # Reject
+            st.info("❌ **REJECT** - Selected recommendations will be marked as rejected. No AWS actions.")
+            confirm_production = True
 
         col1, col2, col3 = st.columns(3)
 
@@ -385,14 +434,25 @@ else:
                         remediator = RemediatorProxy()
                         result = remediator.reject_recommendations(conn, selected_ids)
 
+                        # Log the action for audit trail
+                        log_remediation_action(
+                            action_type='reject',
+                            recommendation_ids=selected_ids,
+                            result=result,
+                            dry_run=True  # Reject is always safe
+                        )
+
                         if result['success']:
                             st.success(f"✅ {result['rejected_count']} recommendation(s) rejected!")
                             st.balloons()
+                            # Clear cache to ensure fresh data on next load
+                            st.cache_data.clear()
                             st.rerun()
                         else:
                             st.error(f"❌ Failed to reject: {result.get('error', 'Unknown error')}")
                     except Exception as e:
                         st.error(f"❌ Error: {e}")
+                        log_error(e, context='reject_recommendations')
 
                 elif action_type == "Approve (Dry-Run)":
                     # Execute in dry-run mode
@@ -402,6 +462,14 @@ else:
                         with st.spinner("🔄 Executing actions in dry-run mode..."):
                             remediator = RemediatorProxy(dry_run=True)
                             results = remediator.execute_recommendations(conn, selected_ids)
+
+                        # Log the action for audit trail
+                        log_remediation_action(
+                            action_type='approve_dry_run',
+                            recommendation_ids=selected_ids,
+                            result=results,
+                            dry_run=True
+                        )
 
                         # Display results
                         success_count = len([r for r in results if r.get('success', False)])
@@ -421,11 +489,14 @@ else:
 
                         if success_count > 0:
                             st.balloons()
+                            # Clear cache to ensure fresh data on next load
+                            st.cache_data.clear()
                             if st.button("🔄 Refresh Page"):
                                 st.rerun()
 
                     except Exception as e:
                         st.error(f"❌ Execution failed: {e}")
+                        log_error(e, context='approve_dry_run')
                         import traceback
                         with st.expander("🔍 Error Details"):
                             st.code(traceback.format_exc())
@@ -438,6 +509,14 @@ else:
                         with st.spinner("⚡ Executing REAL AWS actions..."):
                             remediator = RemediatorProxy(dry_run=False)
                             results = remediator.execute_recommendations(conn, selected_ids)
+
+                        # CRITICAL: Log production actions for audit trail
+                        log_remediation_action(
+                            action_type='approve_execute',
+                            recommendation_ids=selected_ids,
+                            result=results,
+                            dry_run=False  # PRODUCTION - this is logged at WARNING level
+                        )
 
                         # Display results
                         success_count = len([r for r in results if r.get('success', False)])
@@ -457,10 +536,15 @@ else:
 
                         if success_count > 0:
                             st.balloons()
+                            # Clear cache to ensure fresh data on next load
+                            st.cache_data.clear()
                             st.info("💡 Check the History page for complete audit trail")
+                            if st.button("🔄 Refresh Page", key="refresh_after_execute"):
+                                st.rerun()
 
                     except Exception as e:
                         st.error(f"❌ Execution failed: {e}")
+                        log_error(e, context='approve_execute_production')
                         import traceback
                         with st.expander("🔍 Error Details"):
                             st.code(traceback.format_exc())
@@ -476,9 +560,12 @@ else:
                             st.write(f"**Type:** {rec_data['recommendation_type']}")
                             st.write(f"**Instance Type:** {rec_data.get('instance_type', 'N/A')}")
 
-                            # Safely convert to float for formatting
+                            # Safely convert to float for formatting, handle NaN/None
                             cpu_avg = rec_data.get('cpu_avg', 0)
-                            cpu_avg = float(cpu_avg) if cpu_avg is not None else 0.0
+                            try:
+                                cpu_avg = float(cpu_avg) if cpu_avg is not None and not pd.isna(cpu_avg) else 0.0
+                            except (ValueError, TypeError):
+                                cpu_avg = 0.0
                             st.write(f"**CPU Avg:** {cpu_avg:.2f}%")
 
                             savings = float(rec_data['estimated_monthly_savings_eur'])

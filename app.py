@@ -32,6 +32,9 @@ APP_DIR = Path(__file__).parent
 ENV_PATH = APP_DIR / '.env'
 load_dotenv(dotenv_path=ENV_PATH)
 
+# Early validation of backend availability (check once, cache result)
+from utils.remediator import validate_backend_at_startup, get_backend_path
+
 # Page configuration
 st.set_page_config(
     page_title="Wasteless - Cloud Cost Optimizer",
@@ -192,6 +195,24 @@ if not conn:
 # Main page content - Title only (logo is in sidebar)
 st.markdown('<h1 class="main-header">W A S T E L E S S</h1>', unsafe_allow_html=True)
 st.markdown("---")
+
+# Check backend availability and show warning if not available
+backend_valid, backend_message = validate_backend_at_startup()
+if not backend_valid:
+    st.warning(f"""
+    ⚠️ **Backend Not Available**
+
+    The wasteless backend is required for executing remediation actions.
+
+    **Path checked:** `{get_backend_path()}`
+
+    You can still view recommendations and history, but execution features are disabled.
+
+    To enable full functionality, clone the backend repository next to wasteless-ui.
+    """)
+    st.session_state['backend_available'] = False
+else:
+    st.session_state['backend_available'] = True
 
 # Welcome section - Display metrics
 col1, col2, col3 = st.columns(3)

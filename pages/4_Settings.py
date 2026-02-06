@@ -161,11 +161,17 @@ with col2:
         )
 
         if st.button("💾 Save Dry-Run Period"):
-            if config_manager.set_dry_run_days(new_dry_run_days):
-                st.success("✅ Dry-run period updated!")
-                st.rerun()
-            else:
-                st.error("❌ Failed to update")
+            try:
+                from utils.config_manager import ConfigValidationError
+                if config_manager.set_dry_run_days(new_dry_run_days):
+                    st.success("✅ Dry-run period updated!")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to update")
+            except ConfigValidationError as e:
+                st.error(f"❌ Invalid value: {e}")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
 
 st.markdown("---")
 
@@ -190,9 +196,13 @@ with col1:
     with st.expander("⚙️ Edit"):
         new_min_age = st.slider("Days", 1, 90, min_age, key="min_age_slider")
         if st.button("💾 Save", key="save_min_age"):
-            if config_manager.update_protection_rule('min_instance_age_days', new_min_age):
-                st.success("✅ Updated!")
-                st.rerun()
+            try:
+                from utils.config_manager import ConfigValidationError
+                if config_manager.update_protection_rule('min_instance_age_days', new_min_age):
+                    st.success("✅ Updated!")
+                    st.rerun()
+            except ConfigValidationError as e:
+                st.error(f"❌ Invalid value: {e}")
 
 with col2:
     min_idle = protection.get('min_idle_days', 14)
@@ -205,9 +215,13 @@ with col2:
     with st.expander("⚙️ Edit"):
         new_min_idle = st.slider("Days", 1, 60, min_idle, key="min_idle_slider")
         if st.button("💾 Save", key="save_min_idle"):
-            if config_manager.update_protection_rule('min_idle_days', new_min_idle):
-                st.success("✅ Updated!")
-                st.rerun()
+            try:
+                from utils.config_manager import ConfigValidationError
+                if config_manager.update_protection_rule('min_idle_days', new_min_idle):
+                    st.success("✅ Updated!")
+                    st.rerun()
+            except ConfigValidationError as e:
+                st.error(f"❌ Invalid value: {e}")
 
 with col3:
     min_confidence = protection.get('min_confidence_score', 0.8)
@@ -226,9 +240,13 @@ with col3:
             format="%.0%"
         )
         if st.button("💾 Save", key="save_min_confidence"):
-            if config_manager.update_protection_rule('min_confidence_score', new_min_confidence):
-                st.success("✅ Updated!")
-                st.rerun()
+            try:
+                from utils.config_manager import ConfigValidationError
+                if config_manager.update_protection_rule('min_confidence_score', new_min_confidence):
+                    st.success("✅ Updated!")
+                    st.rerun()
+            except ConfigValidationError as e:
+                st.error(f"❌ Invalid value: {e}")
 
 col1, col2 = st.columns(2)
 
@@ -287,9 +305,15 @@ with col1:
         new_instance_id = st.text_input("Instance ID", placeholder="i-1234567890abcdef0")
         if st.button("➕ Add to Whitelist"):
             if new_instance_id:
-                if config_manager.add_instance_to_whitelist(new_instance_id):
-                    st.success(f"✅ Added {new_instance_id} to whitelist")
-                    st.rerun()
+                try:
+                    from utils.config_manager import ConfigValidationError
+                    if config_manager.add_instance_to_whitelist(new_instance_id):
+                        st.success(f"✅ Added {new_instance_id} to whitelist")
+                        st.rerun()
+                except ConfigValidationError as e:
+                    st.error(f"❌ Invalid instance ID: {e}")
+                except Exception as e:
+                    st.error(f"❌ Failed to add instance: {e}")
             else:
                 st.warning("Please enter an instance ID")
 
