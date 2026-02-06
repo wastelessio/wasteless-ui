@@ -14,6 +14,17 @@ ENV_PATH = APP_DIR / '.env'
 load_dotenv(dotenv_path=ENV_PATH)
 
 
+# List of insecure/placeholder passwords that should not be used
+_INSECURE_PASSWORDS = {
+    'CHANGE_ME_USE_STRONG_PASSWORD',
+    'password',
+    'admin',
+    '123456',
+    'wasteless',
+    '',
+}
+
+
 @st.cache_resource
 def get_db_connection():
     """Get PostgreSQL database connection."""
@@ -29,6 +40,14 @@ def get_db_connection():
         st.error("❌ DB_PASSWORD environment variable is not set")
         st.info("💡 Please set DB_PASSWORD in your .env file for security")
         return None
+
+    # Warn about insecure passwords (don't block, just warn)
+    if db_password in _INSECURE_PASSWORDS:
+        st.warning(
+            "⚠️ **Insecure Password Detected**\n\n"
+            "You are using a placeholder or weak password. "
+            "Please set a strong, unique password in your `.env` file before deploying to production."
+        )
 
     try:
         conn = psycopg2.connect(
