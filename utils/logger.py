@@ -124,3 +124,80 @@ def log_cache_stats(cache_name: str, hits: int, misses: int):
     logger = get_logger('cache')
     hit_rate = (hits / (hits + misses) * 100) if (hits + misses) > 0 else 0
     logger.debug(f"Cache: {cache_name} | Hits: {hits} | Misses: {misses} | Hit Rate: {hit_rate:.1f}%")
+
+
+def log_remediation_action(
+    action_type: str,
+    recommendation_ids: list,
+    result: dict,
+    dry_run: bool = True,
+    user: str = "streamlit_user"
+):
+    """
+    Log remediation actions (approve/reject) for audit trail.
+
+    This is critical for compliance and debugging.
+
+    Args:
+        action_type: Type of action ('approve', 'reject', 'execute')
+        recommendation_ids: List of recommendation IDs affected
+        result: Result dict from the operation
+        dry_run: Whether this was a dry-run
+        user: User who performed the action
+    """
+    logger = get_logger('audit')
+
+    # Determine success/failure - check for list FIRST before calling .get()
+    if isinstance(result, list):
+        # Multiple results - count successes
+        success_count = len([r for r in result if r.get('success', False)])
+        total_count = len(result)
+        success = success_count > 0
+        status = f"SUCCESS ({success_count}/{total_count})" if success else "FAILED"
+    else:
+        success = result.get('success', False)
+        status = "SUCCESS" if success else "FAILED"
+
+    # Build log message
+    mode = "DRY-RUN" if dry_run else "PRODUCTION"
+    ids_str = ','.join(map(str, recommendation_ids))
+
+    # Log at WARNING level for production actions, INFO for dry-run
+    log_level = logging.WARNING if not dry_run else logging.INFO
+
+    message = (
+        f"AUDIT | User: {user} | Action: {action_type.upper()} | "
+        f"Mode: {mode} | IDs: [{ids_str}] | Status: {status}"
+    )
+
+    # Add error details if failed (only for dict results)
+    if not success and isinstance(result, dict) and 'error' in result:
+        message += f" | Error: {result['error']}"
+
+    logger.log(log_level, message)
+
+    # Also log individual results for detailed audit
+    if isinstance(result, list):
+        for r in result:
+            instance_id = r.get('instance_id', 'unknown')
+            rec_id = r.get('recommendation_id', 'unknown')
+            rec_status = "SUCCESS" if r.get('success', False) else "FAILED"
+            error = r.get('error', '')
+            logger.info(
+                f"  └─ Rec#{rec_id} | Instance: {instance_id} | {rec_status}"
+                + (f" | Error: {error}" if error else "")
+            )
+
+
+def log_security_event(event_type: str, details: str, severity: str = "WARNING"):
+    """
+    Log security-related events.
+
+    Args:
+        event_type: Type of security event (e.g., 'insecure_password', 'invalid_input')
+        details: Description of the event
+        severity: Log severity ('INFO', 'WARNING', 'ERROR', 'CRITICAL')
+    """
+    logger = get_logger('security')
+    level = getattr(logging, severity.upper(), logging.WARNING)
+    logger.log(level, f"SECURITY | Event: {event_type} | {details}")
