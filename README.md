@@ -385,6 +385,66 @@ docker run -p 8888:8888 wasteless-ui
 
 ---
 
+## ✅ MVP Production Checklist
+
+Before deploying to production, ensure the following checklist is complete:
+
+### Security & Credentials
+- [ ] **Strong database password** - Change `DB_PASSWORD` from template value
+- [ ] **Secure .env file** - Verify `.env` is in `.gitignore` and not committed
+- [ ] **Review input validation** - All user inputs are validated server-side
+- [ ] **Audit logging enabled** - Check `logs/wasteless_ui.log` for audit trail
+
+### Backend Integration
+- [ ] **Backend available** - Verify wasteless backend is cloned and accessible
+- [ ] **Database connection** - Test PostgreSQL connection at startup
+- [ ] **Remediator integration** - Verify EC2Remediator module imports correctly
+
+### Configuration
+- [ ] **Dry-run period configured** - Set appropriate `dry_run_days` (recommended: 7+)
+- [ ] **Protection rules set** - Configure min confidence score, max instances per run
+- [ ] **Whitelist reviewed** - Verify production instances are protected
+- [ ] **Schedule configured** - Set allowed execution windows if needed
+
+### Testing
+- [ ] **Run unit tests** - `python run_tests.py` - all pass
+- [ ] **Run integration tests** - `python -m pytest tests/test_integration.py -v`
+- [ ] **Manual dry-run test** - Test approve flow in dry-run mode
+- [ ] **Cache invalidation** - Verify data refreshes after actions
+
+### Monitoring
+- [ ] **Log files accessible** - Verify `logs/` directory is writable
+- [ ] **Error monitoring** - Review error handling and alerting
+- [ ] **Performance baseline** - Page load < 2 seconds
+
+### Documentation
+- [ ] **README updated** - Version and deployment notes current
+- [ ] **Environment documented** - All required env vars listed
+- [ ] **Runbooks created** - Incident response procedures defined
+
+### Pre-Launch Verification
+```bash
+# 1. Run all tests
+python run_tests.py
+
+# 2. Verify backend connection
+python test_integration.py
+
+# 3. Start the UI and verify manually
+./start.sh
+
+# 4. Check logs for any errors
+tail -f logs/wasteless_ui.log
+```
+
+### Post-Launch Monitoring
+- Check application logs every 24 hours for first week
+- Monitor database query performance
+- Review audit trail for unexpected actions
+- Verify cache TTL is appropriate for your use case
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
