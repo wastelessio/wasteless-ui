@@ -7,16 +7,22 @@
     <link rel="icon" href="/static/images/favicon.svg" type="image/svg+xml">
     <style>
         :root {
-            --primary: #667eea;
-            --primary-dark: #5a67d8;
-            --success: #48bb78;
-            --warning: #ed8936;
-            --danger: #f56565;
-            --gray-100: #f7fafc;
-            --gray-200: #edf2f7;
-            --gray-300: #e2e8f0;
-            --gray-600: #718096;
-            --gray-800: #2d3748;
+            --primary: #111111;
+            --primary-dark: #000000;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --gray-100: #fafafa;
+            --gray-200: #f4f4f5;
+            --gray-300: #e4e4e7;
+            --gray-400: #a1a1aa;
+            --gray-500: #71717a;
+            --gray-600: #52525b;
+            --gray-700: #3f3f46;
+            --gray-800: #27272a;
+            --gray-900: #18181b;
+            --white: #ffffff;
+            --black: #000000;
         }
 
         * {
@@ -40,8 +46,8 @@
         /* Sidebar */
         .sidebar {
             width: 240px;
-            background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
+            background: var(--black);
+            color: var(--white);
             padding: 1.5rem;
             position: fixed;
             height: 100vh;
@@ -208,12 +214,12 @@
         }
 
         .btn-primary {
-            background: var(--primary);
-            color: white;
+            background: var(--black);
+            color: var(--white);
         }
 
         .btn-primary:hover {
-            background: var(--primary-dark);
+            background: var(--gray-800);
         }
 
         .btn-success {
@@ -233,8 +239,8 @@
         }
 
         .btn-outline:hover {
-            border-color: var(--primary);
-            color: var(--primary);
+            border-color: var(--black);
+            color: var(--black);
         }
 
         /* Badges */
@@ -246,10 +252,10 @@
             font-weight: 500;
         }
 
-        .badge-success { background: #c6f6d5; color: #22543d; }
-        .badge-warning { background: #feebc8; color: #744210; }
-        .badge-danger { background: #fed7d7; color: #742a2a; }
-        .badge-info { background: #bee3f8; color: #2a4365; }
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        .badge-info { background: var(--gray-200); color: var(--gray-800); }
 
         /* Forms */
         .form-group {
@@ -274,8 +280,8 @@
 
         .form-input:focus, .form-select:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: var(--black);
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
         }
 
         /* Alerts */
@@ -285,10 +291,10 @@
             margin-bottom: 1rem;
         }
 
-        .alert-success { background: #c6f6d5; color: #22543d; }
-        .alert-warning { background: #feebc8; color: #744210; }
-        .alert-danger { background: #fed7d7; color: #742a2a; }
-        .alert-info { background: #bee3f8; color: #2a4365; }
+        .alert-success { background: #dcfce7; color: #166534; }
+        .alert-warning { background: #fef3c7; color: #92400e; }
+        .alert-danger { background: #fee2e2; color: #991b1b; }
+        .alert-info { background: var(--gray-200); color: var(--gray-800); }
 
         /* Progress */
         .progress {
@@ -300,7 +306,7 @@
 
         .progress-bar {
             height: 100%;
-            background: var(--primary);
+            background: var(--black);
             transition: width 0.3s;
         }
 
@@ -348,13 +354,13 @@
             <!-- Execution Mode Badge -->
             <div style="margin-bottom: 1.5rem;">
                 {% if get_dry_run() %}
-                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(72, 187, 120, 0.2); border-radius: 6px; font-size: 0.8rem;">
-                    <span style="width: 8px; height: 8px; background: #48bb78; border-radius: 50%;"></span>
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 6px; font-size: 0.8rem;">
+                    <span style="width: 8px; height: 8px; background: #22c55e; border-radius: 50%;"></span>
                     <span style="font-weight: 500;">Dry-Run Mode</span>
                 </div>
                 {% else %}
-                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(245, 101, 101, 0.2); border-radius: 6px; font-size: 0.8rem;">
-                    <span style="width: 8px; height: 8px; background: #f56565; border-radius: 50%; animation: pulse 2s infinite;"></span>
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; font-size: 0.8rem;">
+                    <span style="width: 8px; height: 8px; background: #ef4444; border-radius: 50%; animation: pulse 2s infinite;"></span>
                     <span style="font-weight: 500;">Production Mode</span>
                 </div>
                 {% endif %}

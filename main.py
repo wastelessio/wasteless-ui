@@ -186,6 +186,12 @@ class ConfigUpdate(BaseModel):
 # HTML PAGES
 # =============================================================================
 
+@app.get("/landing", response_class=HTMLResponse)
+async def landing(request: Request):
+    """Public landing page."""
+    return templates.TemplateResponse("landing.html", {"request": request})
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, conn=Depends(get_db)):
     """Home page with overview metrics."""
