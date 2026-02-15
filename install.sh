@@ -10,6 +10,7 @@
 # - Installe les dependances
 # - Configure le fichier .env
 # - Verifie l'integration avec le backend
+# - Cree l'alias 'wasteless' pour demarrer l'application
 #
 
 set -e  # Exit on error
@@ -72,10 +73,10 @@ cat << "EOF"
    \ V  V / (_| \__ \ ||  __/ |  __/\__ \__ \   | |_| || |
     \_/\_/ \__,_|___/\__\___|_|\___||___/___/    \___/|___|
 
-    Streamlit Dashboard for Cloud Cost Optimization
+    FastAPI Dashboard for Cloud Cost Optimization
 EOF
 echo -e "${NC}"
-echo -e "${BOLD}Version 1.0 - Installation automatique${NC}"
+echo -e "${BOLD}Version 2.0 - Installation automatique${NC}"
 echo ""
 
 # =============================================================================
@@ -93,7 +94,7 @@ fi
 # =============================================================================
 # VERIFICATION DES PREREQUIS
 # =============================================================================
-print_header "1/5 - Verification des prerequis"
+print_header "1/6 - Verification des prerequis"
 
 MISSING_DEPS=0
 
@@ -163,7 +164,7 @@ print_step "Tous les prerequis sont satisfaits"
 # =============================================================================
 # CREATION DE L'ENVIRONNEMENT VIRTUEL
 # =============================================================================
-print_header "2/5 - Configuration de l'environnement Python"
+print_header "2/6 - Configuration de l'environnement Python"
 
 if [ -d "venv" ]; then
     print_warning "Environnement virtuel existant detecte"
@@ -191,7 +192,7 @@ print_step "Dependances Python installees"
 # =============================================================================
 # CONFIGURATION DU FICHIER .ENV
 # =============================================================================
-print_header "3/5 - Configuration de l'application"
+print_header "3/6 - Configuration de l'application"
 
 if [ -f ".env" ]; then
     print_warning "Fichier .env existant detecte"
@@ -251,9 +252,9 @@ if [ -z "$SKIP_ENV_CONFIG" ]; then
     read -p "Chemin du backend [$BACKEND_PATH]: " BACKEND_INPUT
     BACKEND_PATH=${BACKEND_INPUT:-$BACKEND_PATH}
 
-    # Port Streamlit
-    read -p "Port Streamlit [8888]: " STREAMLIT_PORT
-    STREAMLIT_PORT=${STREAMLIT_PORT:-8888}
+    # Port application
+    read -p "Port application [8888]: " APP_PORT
+    APP_PORT=${APP_PORT:-8888}
 
     # Creation du fichier .env
     cat > .env << EOF
@@ -273,7 +274,7 @@ DB_PASSWORD=$DB_PASSWORD
 WASTELESS_BACKEND_PATH=$BACKEND_PATH
 
 # UI Configuration
-STREAMLIT_SERVER_PORT=$STREAMLIT_PORT
+STREAMLIT_SERVER_PORT=$APP_PORT
 STREAMLIT_SERVER_ADDRESS=localhost
 
 # Log Level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -292,7 +293,7 @@ fi
 # =============================================================================
 # VERIFICATION DE L'INTEGRATION
 # =============================================================================
-print_header "4/5 - Verification de l'integration"
+print_header "4/6 - Verification de l'integration"
 
 source .env
 
@@ -333,8 +334,9 @@ fi
 # Test des imports Python
 print_info "Verification des modules Python..."
 if python3 -c "
-import streamlit
-import pandas
+import fastapi
+import uvicorn
+import jinja2
 import psycopg2
 import yaml
 print('OK')
@@ -348,7 +350,7 @@ fi
 # =============================================================================
 # EXECUTION DES TESTS
 # =============================================================================
-print_header "5/5 - Execution des tests"
+print_header "5/6 - Execution des tests"
 
 print_info "Lancement des tests unitaires..."
 if python3 run_tests.py 2>/dev/null; then
@@ -359,41 +361,73 @@ else
 fi
 
 # =============================================================================
+# CREATION DE L'ALIAS
+# =============================================================================
+print_header "6/6 - Configuration de l'alias 'wasteless'"
+
+SHELL_RC=""
+if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
+    SHELL_RC="$HOME/.zshrc"
+elif [ -n "$BASH_VERSION" ] || [ -f "$HOME/.bashrc" ]; then
+    SHELL_RC="$HOME/.bashrc"
+fi
+
+if [ -n "$SHELL_RC" ]; then
+    ALIAS_LINE="alias wasteless='$SCRIPT_DIR/start.sh'"
+
+    # Check if alias already exists
+    if grep -q "alias wasteless=" "$SHELL_RC" 2>/dev/null; then
+        print_step "Alias 'wasteless' deja present dans $SHELL_RC"
+    else
+        echo "" >> "$SHELL_RC"
+        echo "# WasteLess CLI" >> "$SHELL_RC"
+        echo "$ALIAS_LINE" >> "$SHELL_RC"
+        print_step "Alias 'wasteless' ajoute a $SHELL_RC"
+    fi
+else
+    print_warning "Shell non detecte. Ajoutez manuellement:"
+    echo "  alias wasteless='$SCRIPT_DIR/start.sh'"
+fi
+
+# =============================================================================
 # RESUME ET PROCHAINES ETAPES
 # =============================================================================
 print_header "Installation terminee"
+
+# Get port from .env
+source .env
+APP_PORT="${STREAMLIT_SERVER_PORT:-8888}"
 
 echo -e "${GREEN}${BOLD}WasteLess UI a ete installe avec succes!${NC}"
 echo ""
 echo -e "${BOLD}Configuration:${NC}"
 echo "  - Base de donnees: $DB_HOST:$DB_PORT/$DB_NAME"
 echo "  - Backend: $BACKEND_PATH"
-echo "  - Port UI: $STREAMLIT_PORT"
+echo "  - Port UI: $APP_PORT"
 echo ""
 echo -e "${BOLD}Prochaines etapes:${NC}"
 echo ""
-echo "  1. ${CYAN}Demarrer l'interface:${NC}"
-echo "     ./start.sh"
-echo "     -> Acces: http://localhost:$STREAMLIT_PORT"
+echo -e "  1. ${CYAN}Rechargez votre shell:${NC}"
+echo "     source $SHELL_RC"
 echo ""
-echo "  2. ${CYAN}Ou manuellement:${NC}"
-echo "     source venv/bin/activate"
-echo "     streamlit run app.py --server.port $STREAMLIT_PORT"
+echo -e "  2. ${CYAN}Demarrez l'interface:${NC}"
+echo "     wasteless"
+echo "     -> Acces: http://localhost:$APP_PORT"
+echo ""
+echo -e "  3. ${CYAN}Ou avec le script:${NC}"
+echo "     ./start.sh"
 echo ""
 echo -e "${BOLD}Pages disponibles:${NC}"
-echo "  - Dashboard:       Vue d'ensemble des economies"
+echo "  - Home:            Vue d'ensemble"
+echo "  - Dashboard:       Metriques et graphiques"
 echo "  - Recommendations: Approuver/Rejeter les actions"
-echo "  - History:         Historique des remédiations"
+echo "  - History:         Historique des remediations"
 echo "  - Settings:        Configuration et whitelist"
 echo ""
 echo -e "${BOLD}Commandes utiles:${NC}"
-echo "  - Activer l'environnement: source venv/bin/activate"
-echo "  - Lancer les tests:        python run_tests.py"
-echo "  - Voir les logs:           tail -f logs/wasteless_ui.log"
-echo ""
-echo -e "${BOLD}Documentation:${NC}"
-echo "  - README.md: Guide complet d'utilisation"
-echo "  - Backend:   ../wasteless/README.md"
+echo "  - Demarrer:      wasteless"
+echo "  - Lancer tests:  python run_tests.py"
+echo "  - Voir logs:     tail -f logs/wasteless_ui.log"
 echo ""
 echo -e "${YELLOW}${BOLD}Important:${NC}"
 echo "  Le mode DRY-RUN est actif par defaut."
