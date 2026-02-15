@@ -297,7 +297,7 @@ class RemediatorProxy:
             cursor.execute("""
                 UPDATE recommendations
                 SET status = 'rejected',
-                    updated_at = NOW()
+                    applied_at = NOW()
                 WHERE id = ANY(%s)
                 RETURNING id
             """, (recommendation_ids,))
